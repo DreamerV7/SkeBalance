@@ -11,7 +11,7 @@ concurrency:
 jobs:
   publish:
     if: github.event_name == 'workflow_dispatch' || vars.AUTO_DEPLOY_NETLIFY == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -34,3 +34,4 @@ jobs:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         run: node scripts/deploy-netlify.mjs
+
