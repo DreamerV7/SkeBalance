@@ -1,0 +1,1 @@
+{"name":"skebalance","version":"0.2.0","private":true,"type":"module","engines":{"node":">=22"},"scripts":{"start":"node server.mjs","build":"node scripts/build.mjs","test":"node --test tests/*.test.mjs","test:browser":"node tests/browser.mjs && node tests/auth-browser.mjs"},"devDependencies":{"@electric-sql/pglite":"0.3.14","playwright":"1.56.1"}}

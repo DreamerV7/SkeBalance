@@ -1,0 +1,33 @@
+name: Apply Supabase migrations
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: supabase-production-migrations
+  cancel-in-progress: false
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Validate required secrets
+        run: node scripts/check-database-env.mjs
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Link selected project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+      - name: Apply migrations
+        run: supabase db push --linked

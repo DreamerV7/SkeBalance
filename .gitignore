@@ -1,0 +1,14 @@
+node_modules/
+tools/vendor-build/
+.openai/
+.env
+.env.*
+!.env.example
+.netlify/
+dist/config.js
+site.zip
+qa/
+*.log
+*.pdf
+!tests/fixtures/*.pdf
+!dist/vendor/*
