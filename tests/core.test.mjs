@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {dateISO,cents,parseCSV,splitCSV,parseSberLines,detectRecurring,dailyEstimate,occurrences,forecast,toCSV,classifyExpense,classifyIncome,merchant,recognizeMerchant} from '../dist/core.mjs';
+import {dateISO,cents,parseCSV,splitCSV,parseSberLines,detectRecurring,dailyEstimate,occurrences,forecast,toCSV,classifyExpense,classifyIncome,merchant,recognizeMerchant,recognizeSpending} from '../dist/core.mjs';
 const base={balance:3500000,from:'2026-11-12',to:'2026-11-30',daily:55000,reserve:500000,purchase:1200000,obligations:[{label:'Аренда',date:'2026-11-15',amount:1200000}]};
 test('dates are strict and leap years are respected',()=>{assert.equal(dateISO('29.02.2024'),'2024-02-29');assert.throws(()=>dateISO('29.02.2026'));assert.throws(()=>dateISO('2026-13-01'));});
 test('money parsing preserves cents and rejects ambiguity',()=>{assert.equal(cents('−1 234,56 ₽'),-123456);assert.equal(cents('0'),0);assert.throws(()=>cents(''));assert.throws(()=>cents('1.234'));assert.throws(()=>cents('1e5'));});
@@ -46,7 +46,29 @@ test('scholarships are income and incoming transfers are receipts, neither are s
  assert.equal(classifyIncome(scholarship),'Доход · стипендия');assert.equal(classifyIncome({description:'SBOL',category:'Перевод на карту'}),'Поступление · перевод');assert.equal(dailyEstimate([scholarship],[],'2026-10-01','2026-10-31').total,0);
 });
 test('category breakdown reconciles spending and respects edits, regular and ignored rows',()=>{
- const ops=[{id:'shop',date:'2026-10-01',amount:-30000,description:'PLAYEROK',category:'Оплата по QR–коду СБП'}, {id:'transfer',date:'2026-10-02',amount:-60000,description:'SBOL',category:'Перевод на карту'}, {id:'ignored',date:'2026-10-02',amount:-99999,ignored:true}, {id:'regular',date:'2026-10-03',amount:-99999}];
- const r=dailyEstimate(ops,[{operationIds:['regular']}],'2026-10-01','2026-10-30');assert.equal(r.total,90000);assert.equal(r.categories.reduce((s,c)=>s+c.total,0),r.total);assert.equal(r.categories.find(c=>c.category==='Интернет-покупки').daily,1000);
+ const ops=[{id:'shop',date:'2026-10-01',amount:-30000,description:'PLAYEROK',category:'Оплата по QR–коду СБП',spendingRole:'daily'}, {id:'transfer',date:'2026-10-02',amount:-60000,description:'SBOL',category:'Перевод на карту'}, {id:'ignored',date:'2026-10-02',amount:-99999,ignored:true}, {id:'regular',date:'2026-10-03',amount:-99999}];
+ const r=dailyEstimate(ops,[{operationIds:['regular']}],'2026-10-01','2026-10-30');assert.equal(r.total,30000);assert.equal(r.otherTotal,60000);assert.equal(r.regularTotal,99999);assert.equal(r.categories.reduce((s,c)=>s+c.total,0),r.total);assert.equal(r.categories.find(c=>c.category==='Интернет-покупки').daily,1000);
  assert.equal(classifyExpense({...ops[1],categoryOverride:'Образование'}).category,'Образование');assert.equal(classifyExpense({...ops[1],categoryOverride:'<invalid>'}).category,'Переводы на карту');
+});
+test('a single utility or internet bill never increases everyday spending',()=>{
+ const ops=[{id:'utility',date:'2026-10-01',amount:-600000,category:'ЖКХ',description:'Коммунальные услуги'}, {id:'net',date:'2026-10-02',amount:-100000,category:'Оплата по QR–коду СБП',description:'Goodline'}, {id:'food',date:'2026-10-03',amount:-310000,category:'Продукты',description:'Магазин'}];
+ const a=dailyEstimate(ops,[],'2026-10-01','2026-10-31');assert.equal(a.daily,10000);assert.equal(a.total,310000);assert.equal(a.separated.filter(r=>r.role==='scheduled').length,2);assert.equal(a.total+a.otherTotal,1010000);
+ const b=dailyEstimate(ops,detectRecurring(ops), '2026-10-01','2026-10-31');assert.equal(b.daily,a.daily);
+});
+test('three irregular transfers remain separate regardless of frequency',()=>{
+ const ops=['01','11','27'].map((d,i)=>({id:String(i),date:'2026-10-'+d,amount:-10000,category:'Перевод на карту',description:'SBOL'}));const a=dailyEstimate(ops,[],'2026-10-01','2026-10-31');assert.equal(a.total,0);assert.equal(a.otherTotal,30000);assert.equal(detectRecurring(ops).length,0);
+});
+test('weekly habits are found across different merchants, rare restaurant visits remain occasional',()=>{
+ const frequent=['01','03','08','10','15','17','22','24','29'].map((d,i)=>({id:String(i),date:'2026-10-'+d,amount:-50000,category:'Кафе и рестораны',description:'Ресторан '+i}));
+ const a=dailyEstimate(frequent,[],'2026-10-01','2026-10-31');assert.equal(a.total,450000);assert.equal(a.separated.length,0);assert.equal(a.categories[0].average,50000);assert.match(a.recognition.get('0').reason,/Категория/);
+ const b=dailyEstimate(frequent.slice(0,1),[],'2026-10-01','2026-10-31');assert.equal(b.total,0);assert.equal(b.separated[0].role,'occasional');
+});
+test('a short shopping burst does not establish a habit and manual correction wins',()=>{
+ const ops=['01','02','03'].map((d,i)=>({id:String(i),date:'2026-10-'+d,amount:-100000,category:'Одежда и аксессуары',description:'Бутик '+i}));const a=dailyEstimate(ops,[],'2026-10-01','2026-10-31');assert.equal(a.total,0);assert.equal(detectRecurring(ops).length,0);
+ const b=dailyEstimate(ops.map(t=>({...t,spendingRole:'daily'})),[],'2026-10-01','2026-10-31');assert.equal(b.total,300000);assert.equal(b.otherTotal,0);
+ assert.equal(recognizeSpending([{...ops[0],category:'Кафе и рестораны'}],'2026-10-01','2026-10-07').get('0').confidence,'низкая');
+});
+test('weekday meals use calendar-day budget and never become monthly obligations',()=>{
+ const ops=[];for(let d='2026-10-01';d<='2026-10-31';d=new Date(Date.parse(d)+86400000).toISOString().slice(0,10)){const day=new Date(d).getUTCDay();if(day!==0&&day!==6)ops.push({id:d,date:d,amount:-20000,category:'Питание',description:'Столовая'});}
+ const a=dailyEstimate(ops,detectRecurring(ops),'2026-10-01','2026-10-31');assert.equal(a.total,ops.length*20000);assert.equal(a.daily,Math.round(ops.length*20000/31));assert.equal(detectRecurring(ops).length,0);
 });
