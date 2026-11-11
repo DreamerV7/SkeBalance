@@ -1,41 +1,48 @@
 import {initAccount} from './account.mjs';
 import {cleanSnapshot} from './snapshot.mjs';
-import {cents,dateISO,addDays,dayNumber,parseCSV,parseSberLines,detectRecurring,dailyEstimate,forecast,toCSV} from './core.mjs';
+import {cents,dateISO,addDays,dayNumber,parseCSV,parseSberLines,detectRecurring,dailyEstimate,forecast,toCSV,classifyExpense,expenseCategories,merchant,classifyIncome} from './core.mjs';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:2}).format(n/100);
 const dt=s=>new Intl.DateTimeFormat('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'UTC'}).format(new Date(s+'T00:00:00Z'));
 const today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');};
-let state={operations:[],recurring:[],manual:[],page:0,filename:'',demo:false,dailyManual:false,loaded:false,ordinaryKeys:[]};
+let state={operations:[],recurring:[],manual:[],page:0,filename:'',demo:false,dailyManual:false,loaded:false,ordinaryKeys:[],confirmedKeys:[]};
 let lastForecast=null,loadToken=0;
 $('from').value=today();$('to').value=addDays(today(),18);
 function alertMessage(message){$('alert').textContent=message||'';$('alert').hidden=!message;}
 function invalidate(){ $('confirmed').checked=false;$('forecast').hidden=true;$('step3').className='step';lastForecast=null;window.dispatchEvent(new CustomEvent('skebalance:calculation',{detail:{valid:false}})); }
 function summary(){const t=state.operations,spend=t.filter(x=>x.amount<0).reduce((s,x)=>s-x.amount,0),income=t.filter(x=>x.amount>0).reduce((s,x)=>s+x.amount,0);$('history-summary').innerHTML=[['Операций',t.length],['Списания',fmt(spend)],['Поступления',fmt(income)]].map(([a,b])=>`<div><span>${esc(a)}</span><strong>${esc(b)}</strong></div>`).join('');$('operation-count').textContent=`(${t.length})`;}
-function regularList(){ $('recurring-count').textContent=state.recurring.length;$('recurring-list').innerHTML=state.recurring.length?state.recurring.map(r=>`<div class="regular-row" data-id="${r.id}"><label class="regular-top"><input type="checkbox" data-field="active" ${r.active?'checked':''}><span class="regular-name">${esc(r.label)}</span></label><div class="regular-fields"><label>Ожидаемая сумма, ₽<input data-field="amount" type="number" min="0" step="0.01" value="${r.amount/100}" required></label><label>Число месяца<input data-field="day" type="number" min="1" max="31" step="1" value="${r.day}" required></label></div><p class="micro">${r.count} списания · последнее ${dt(r.lastDate)} · история исключена из обычных трат</p><button class="text-button" type="button" data-action="daily">Обычные траты — убрать из регулярных</button></div>`).join(''):'<p class="empty">Уверенных повторений не найдено. Добавьте известные обязательные платежи в расчёте ниже.</p>'; }
+function regularList(){ $('recurring-count').textContent=state.recurring.length;$('recurring-list').innerHTML=state.recurring.length?state.recurring.map(r=>`<div class="regular-row" data-id="${r.id}"><label class="regular-top"><input type="checkbox" data-field="active" ${r.active?'checked':''}><span class="regular-name">${esc(r.label)}</span></label><div class="regular-fields"><label>Ожидаемая сумма, ₽<input data-field="amount" type="number" min="0" step="0.01" value="${r.amount/100}" required></label><label>Число месяца<input data-field="day" type="number" min="1" max="31" step="1" value="${r.day}" required></label></div><p class="micro">${r.confirmed?'Отмечен вами как ежемесячный · ':''}${r.count} списания · последнее ${dt(r.lastDate)} · история исключена из обычных трат</p><button class="text-button" type="button" data-action="daily">Обычные траты — убрать из регулярных</button></div>`).join(''):'<p class="empty">Уверенных повторений не найдено. Добавьте известные обязательные платежи в расчёте ниже.</p>'; }
 function estimate(){
- if(state.saved)return {daily:cents($('daily').value),days:0,total:0};
+ if(state.saved)return {daily:cents($('daily').value),days:0,total:0,categories:[]};
  try{const start=dateISO($('history-start').value),end=dateISO($('history-end').value),from=dateISO($('from').value),cutoff=end>=from?addDays(from,-1):end;
   const est=dailyEstimate(state.operations,state.recurring,start,cutoff);if(!state.dailyManual)$('daily').value=(est.daily/100).toFixed(2);
   $('daily-explanation').textContent=`${fmt(est.total)} за ${est.days} календарных дней без регулярных и исключённых операций. `+(state.dailyManual?'Используется ваша оценка.':'Используется среднее за полные дни, включая дни без трат.');if(est.days<60)$('daily-explanation').textContent+=' Короткая история: регулярные платежи могут не определиться.';if(end>=from)$('daily-explanation').textContent+=' Операции начиная с даты расчёта исключены из анализа.';$('daily-explanation').classList.toggle('manual-label',state.dailyManual);
-  return est;
- }catch(e){$('daily-explanation').textContent=e.message;if(!state.dailyManual)$('daily').value='';throw e;}
+  renderDailyCategories(est);return est;
+ }catch(e){$('daily-categories').textContent='';$('daily-explanation').textContent=e.message;if(!state.dailyManual)$('daily').value='';throw e;}
+}
+function renderDailyCategories(est){
+ $('daily-categories').innerHTML=est.categories.length?`<p class="micro">По категориям за выбранный период${state.dailyManual?' · ваша оценка введена отдельно':''}</p><ul class="daily-category-list">${est.categories.map(r=>`<li><span>${esc(r.category)}<small>${esc(fmt(r.total))} за период · ${r.count} оп.</small></span><strong>${esc(fmt(r.daily))}<small>в день</small></strong></li>`).join('')}</ul><p class="micro">Категории определены по описанию и данным банка: их можно исправить в операциях. Среднее считается по всем календарным дням; округление по категориям может отличаться от общего итога.</p>`:'<p class="micro">За этот период нет повседневных расходов: проверьте даты и исключённые операции.</p>';
 }
 function refreshRecurring(){
  const previous=new Map(state.recurring.map(r=>[r.key,r]));
  const from=dateISO($('from').value),start=dateISO($('history-start').value),end=dateISO($('history-end').value);
- state.recurring=detectRecurring(state.operations.filter(t=>t.date<from&&t.date>=start&&t.date<=end)).filter(r=>!state.ordinaryKeys.includes(r.key)).map(r=>{const p=previous.get(r.key);return p?{...r,amount:p.amount,day:p.day,active:p.active}:r;});regularList();
+ state.recurring=detectRecurring(state.operations.filter(t=>t.date<from&&t.date>=start&&t.date<=end),state.confirmedKeys).filter(r=>!state.ordinaryKeys.includes(r.key)).map(r=>{const p=previous.get(r.key);return p?{...r,amount:p.amount,day:p.day,active:p.active}:r;});regularList();
 }
 function renderTransactions(){
- const q=$('search').value.toLowerCase(),filtered=state.operations.filter(t=>(t.description+' '+t.category).toLowerCase().includes(q)).slice().reverse(),max=Math.max(1,Math.ceil(filtered.length/50));state.page=Math.min(state.page,max-1);const items=filtered.slice(state.page*50,(state.page+1)*50);
+ const q=$('search').value.toLowerCase(),filtered=state.operations.filter(t=>(t.description+' '+t.category+' '+(t.amount<0?classifyExpense(t).category:classifyIncome(t))).toLowerCase().includes(q)).slice().reverse(),max=Math.max(1,Math.ceil(filtered.length/50));state.page=Math.min(state.page,max-1);const items=filtered.slice(state.page*50,(state.page+1)*50);
  const regIds=new Set(state.recurring.flatMap(r=>r.operationIds));
- $('transactions-body').innerHTML=items.map(t=>`<tr class="${t.ignored?'excluded':''}"><td>${dt(t.date)}</td><td>${esc(t.description)}${/перевод|сбп|transfer/i.test(t.category+' '+t.description)?'<span class="transfer-flag">Проверьте: перевод между своими счетами?</span>':''}${regIds.has(t.id)?'<span class="transfer-flag">Учтён в регулярных</span>':''}</td><td>${esc(t.category)}</td><td class="numeric ${t.amount>0?'income':''}">${esc(fmt(t.amount))}</td><td><input type="checkbox" data-op="${t.id}" aria-label="Не учитывать: ${esc(t.description)}" ${t.ignored?'checked':''}></td></tr>`).join('')||'<tr><td colspan="5">Нет подходящих операций.</td></tr>';
+ $('transactions-body').innerHTML=items.map(t=>{
+  const c=classifyExpense(t),regular=regIds.has(t.id);
+  const options=[...new Set([c.category,...expenseCategories])].map(category=>`<option value="${esc(category)}" ${category===c.category?'selected':''}>${esc(category)}</option>`).join('');
+  return `<tr class="${t.ignored?'excluded':''}"><td>${dt(t.date)}</td><td>${esc(t.description)}${t.amount<0&&c.merchant?`<span class="source-category">Получатель: ${esc(c.merchant)}</span>`:''}${t.amount<0&&c.reviewTransfer?'<span class="transfer-flag">Входит в расходы. Если это перевод себе, отметьте «Не учитывать».</span>':''}${regular?'<span class="transfer-flag">Учтён в регулярных</span>':''}${t.amount<0&&!regular?`<button class="text-button operation-regular" type="button" data-regular="${t.id}" ${t.ignored?'disabled':''}>Сделать ежемесячным</button>`:''}</td><td>${t.amount<0?`<select data-category="${t.id}" aria-label="Категория: ${esc(t.description)}">${options}</select><span class="source-category">${esc(c.source)} · в выписке: ${esc(t.category)}</span>${!merchant(t).startsWith('unknown:')?`<button class="text-button" type="button" data-apply-category="${t.id}">Применить к этому получателю</button>`:''}`:`<span class="income">${esc(classifyIncome(t))}</span><span class="source-category">В выписке: ${esc(t.category)}</span>`}</td><td class="numeric ${t.amount>0?'income':''}">${esc(fmt(t.amount))}</td><td><input type="checkbox" data-op="${t.id}" aria-label="Не учитывать: ${esc(t.description)}" ${t.ignored?'checked':''}></td></tr>`;
+ }).join('')||'<tr><td colspan="5">Нет подходящих операций.</td></tr>';
  $('page-label').textContent=`${state.page+1} / ${max}`;$('prev').disabled=state.page===0;$('next').disabled=state.page===max-1;
 }
 function download(text,name){const u=URL.createObjectURL(new Blob([text],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),5000);}
 function loadData(parsed,filename,isDemo=false){
  $('from-display').readOnly=true;$('forecast-intro').textContent='Уточните баланс и дату дохода. Оценка расходов уже взята из истории.';
- state={operations:parsed.operations,recurring:[],ordinaryKeys:[],manual:[],page:0,filename,demo:isDemo,dailyManual:false,loaded:true};
+ state={operations:parsed.operations,recurring:[],ordinaryKeys:[],confirmedKeys:[],manual:[],page:0,filename,demo:isDemo,dailyManual:false,loaded:true};
  $('history-start').value=parsed.periodStart||parsed.operations[0].date;$('history-end').value=parsed.periodEnd||parsed.operations.at(-1).date;$('daily').value='';$('balance').value=isDemo?'35000':'';$('reserve').value=isDemo?'5000':'';$('purchase').value=isDemo?'12000':'0';$('search').value='';
  $('review').hidden=false;$('reset').hidden=false;$('file-label').textContent=(isDemo?'Учебный пример · ':'')+filename;$('import-warnings').textContent=parsed.warnings.join('\n')+(isDemo?'\nВсе операции и цифры вымышлены. Это демонстрация, а не проверка точности на реальных данных.':'');
  $('step1').className='step done';$('step2').className='step active';invalidate();summary();refreshRecurring();renderManual();renderTransactions();try{estimate();}catch(e){alertMessage(e.message);} $('review').scrollIntoView({behavior:'smooth',block:'start'});
@@ -65,10 +72,18 @@ function demo(){
 }
 $('demo').addEventListener('click',demo);
 $('template').addEventListener('click',()=>download('\uFEFFДата операции;Сумма;Категория;Описание;Остаток\r\n01.10.2026;50000;Доход;Зарплата;50000\r\n02.10.2026;-550;Продукты;Магазин;49450\r\n05.10.2026;-8000;Жильё;Аренда;41450\r\n','Шаблон-операций.csv'));
-$('export').addEventListener('click',()=>download(toCSV(state.operations),'СкеБаланс-операции.csv'));
+$('export').addEventListener('click',()=>download(toCSV(state.operations.map(t=>({...t,category:t.amount<0?classifyExpense(t).category:t.category}))),'СкеБаланс-операции.csv'));
 $('recurring-list').addEventListener('change',e=>{const row=e.target.closest('[data-id]');if(!row)return;invalidate();const r=state.recurring.find(t=>t.id===row.dataset.id),field=e.target.dataset.field;try{if(field==='active')r.active=e.target.checked;else if(field==='amount'){r.amount=null;r.amount=cents(e.target.value);}else if(field==='day')r.day=Number(e.target.value);estimate();alertMessage('');}catch(err){alertMessage(err.message);}});
-$('recurring-list').addEventListener('click',e=>{if(e.target.dataset.action!=='daily')return;const id=e.target.closest('[data-id]').dataset.id;state.ordinaryKeys.push(state.recurring.find(r=>r.id===id).key);state.recurring=state.recurring.filter(r=>r.id!==id);regularList();invalidate();renderTransactions();try{estimate();}catch(e){alertMessage(e.message);}});
-$('transactions-body').addEventListener('change',e=>{const t=state.operations.find(t=>t.id===e.target.dataset.op);if(!t)return;t.ignored=e.target.checked;refreshRecurring();renderTransactions();invalidate();try{estimate();alertMessage('');}catch(e){alertMessage(e.message);}});
+$('recurring-list').addEventListener('click',e=>{if(e.target.dataset.action!=='daily')return;const id=e.target.closest('[data-id]').dataset.id;const key=state.recurring.find(r=>r.id===id).key;state.ordinaryKeys.push(key);state.confirmedKeys=state.confirmedKeys.filter(k=>k!==key);state.recurring=state.recurring.filter(r=>r.id!==id);regularList();invalidate();renderTransactions();try{estimate();alertMessage('');}catch(e){alertMessage(e.message);}});
+$('transactions-body').addEventListener('change',e=>{const t=state.operations.find(t=>t.id===(e.target.dataset.op||e.target.dataset.category));if(!t)return;if(e.target.dataset.category)t.categoryOverride=e.target.value;else t.ignored=e.target.checked;refreshRecurring();renderTransactions();invalidate();try{estimate();alertMessage('');}catch(e){alertMessage(e.message);}});
+$('transactions-body').addEventListener('click',e=>{
+ const apply=state.operations.find(t=>t.id===e.target.dataset.applyCategory);
+ if(apply){const key=merchant(apply);if(key.startsWith('unknown:'))return;const category=classifyExpense(apply).category;let count=0;for(const op of state.operations){if(op.amount<0&&merchant(op)===key){op.categoryOverride=category;count++;}}refreshRecurring();renderTransactions();invalidate();try{estimate();alertMessage(`Категория «${category}» применена к ${count} операциям этого получателя в текущей выписке. При новом импорте правки нужно повторить.`);}catch(err){alertMessage(err.message);}return;}
+ const t=state.operations.find(t=>t.id===e.target.dataset.regular);if(!t||t.amount>=0||t.ignored)return;
+ if(t.date>=$('from').value){alertMessage('Для регулярного платежа выберите операцию до даты расчёта.');return;}
+ const key=merchant(t);if(!key){alertMessage('У операции нет получателя. Добавьте обязательный платёж в расчёте.');return;}
+ if(!state.confirmedKeys.includes(key))state.confirmedKeys.push(key);state.ordinaryKeys=state.ordinaryKeys.filter(k=>k!==key);refreshRecurring();renderTransactions();invalidate();try{estimate();alertMessage('Платёж отмечен как ежемесячный. Проверьте сумму и число месяца в регулярных платежах. История этого получателя исключена из повседневных расходов.');}catch(err){alertMessage(err.message);}
+});
 for(const id of ['history-start','history-end'])$(id).addEventListener('change',()=>{invalidate();try{refreshRecurring();renderTransactions();estimate();alertMessage('');}catch(e){alertMessage(e.message);}});
 $('daily').addEventListener('input',()=>{state.dailyManual=true;try{estimate();}catch{}if(!$('forecast').hidden)calculate();});
 $('auto-daily').addEventListener('click',()=>{state.dailyManual=false;try{estimate();alertMessage('');if(!$('forecast').hidden)calculate();}catch(e){alertMessage(e.message);}});
@@ -98,7 +113,7 @@ function calculate(){
 for(const id of ['balance','reserve','purchase','to'])$(id).addEventListener('input',calculate);
 $('from').addEventListener('change',()=>{invalidate();try{refreshRecurring();renderTransactions();estimate();alertMessage('');}catch(e){alertMessage(e.message);}});
 document.querySelectorAll('[data-purchase]').forEach(b=>b.addEventListener('click',()=>{$('purchase').value=b.dataset.purchase;calculate();}));
-$('reset').addEventListener('click',()=>{loadToken++;state={operations:[],recurring:[],manual:[],page:0,filename:'',demo:false,dailyManual:false,loaded:false,ordinaryKeys:[]};lastForecast=null;$('review').hidden=true;$('forecast').hidden=true;$('reset').hidden=true;$('confirmed').checked=false;$('balance').value='';$('reserve').value='';$('file').value='';$('transactions-body').textContent='';$('schedule-list').textContent='';$('recurring-list').textContent='';$('manual-list').textContent='';$('step1').className='step active';$('step2').className='step';$('step3').className='step';alertMessage('');window.scrollTo({top:0,behavior:'smooth'});});
+$('reset').addEventListener('click',()=>{loadToken++;state={operations:[],recurring:[],manual:[],page:0,filename:'',demo:false,dailyManual:false,loaded:false,ordinaryKeys:[],confirmedKeys:[]};lastForecast=null;$('review').hidden=true;$('forecast').hidden=true;$('reset').hidden=true;$('confirmed').checked=false;$('balance').value='';$('reserve').value='';$('file').value='';$('transactions-body').textContent='';$('schedule-list').textContent='';$('recurring-list').textContent='';$('manual-list').textContent='';$('step1').className='step active';$('step2').className='step';$('step3').className='step';alertMessage('');window.scrollTo({top:0,behavior:'smooth'});});
 
 function captureCalculation(){
  if(!lastForecast)throw Error('Сначала заполните данные и получите расчёт.');
@@ -106,7 +121,7 @@ function captureCalculation(){
 }
 function restoreCalculation(value){
  const snapshot=cleanSnapshot(value);loadToken++;
- state={operations:[],recurring:snapshot.recurring.map((r,i)=>({...r,id:'reg-'+i,operationIds:[],count:0,lastDate:snapshot.from})),ordinaryKeys:[],manual:snapshot.obligations.map(r=>({...r,id:crypto.randomUUID(),amount:(r.amount/100).toFixed(2)})),page:0,filename:'',demo:false,dailyManual:true,loaded:true,saved:true};
+ state={operations:[],recurring:snapshot.recurring.map((r,i)=>({...r,id:'reg-'+i,operationIds:[],count:0,lastDate:snapshot.from})),ordinaryKeys:[],confirmedKeys:[],manual:snapshot.obligations.map(r=>({...r,id:crypto.randomUUID(),amount:(r.amount/100).toFixed(2)})),page:0,filename:'',demo:false,dailyManual:true,loaded:true,saved:true};
  for(const id of ['from','from-display'])$(id).value=snapshot.from;$('to').value=snapshot.to;$('history-start').value=snapshot.from;$('history-end').value=addDays(snapshot.from,-1);
  for(const id of ['balance','daily','reserve','purchase'])$(id).value=(snapshot[id]/100).toFixed(2);
  $('review').hidden=true;$('forecast').hidden=false;$('reset').hidden=false;$('confirmed').checked=true;$('from-display').readOnly=false;

@@ -1,3 +1,5 @@
+import {recognizeMerchant} from './merchants.mjs';
+export {recognizeMerchant} from './merchants.mjs';
 export const DAY=86400000;
 export function dateISO(value){
  const s=String(value??'').trim();let y,m,d;
@@ -72,13 +74,53 @@ export function parseSberLines(lines){
  if(!debitMatch||!creditMatch)warnings.push('Итоги списаний или пополнений не найдены: автоматическая сверка неполная.');
  return {operations:operations.sort((a,b)=>a.date.localeCompare(b.date)),periodStart:period?dateISO(period[1]):null,periodEnd:period?dateISO(period[2]):null,warnings};
 }
-export function merchant(t){return (t.description||t.category).toLowerCase().replace(/ё/g,'е').replace(/(?:карта|счет|счёт|card)\s*[*\d]+/g,'').replace(/\b\d{2}:\d{2}\b/g,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim();}
-export function detectRecurring(operations){
- const groups=new Map();for(const t of operations){if(t.amount>=0||t.ignored)continue;const key=merchant(t);if(!key||/без описания|перевод|transfer|сбп/i.test(t.category+' '+t.description))continue;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(t);}
+export const expenseCategories=['Продукты','Кафе и рестораны','Транспорт','Жильё и ЖКХ','Связь и интернет','Здоровье','Образование','Подписки','Интернет-покупки','Покупки','Оплата по QR / СБП','Переводы на карту','Прочие расходы'];
+export function classifyIncome(t){
+ const text=(String(t.category||'')+' '+String(t.description||'')).toLowerCase().replace(/ё/g,'е');
+ if(/стипенди/.test(text))return 'Доход · стипендия';
+ if(/зарплат|заработн/.test(text))return 'Доход · зарплата';
+ if(/возврат|refund/.test(text))return 'Поступление · возврат';
+ if(/перевод|transfer|sbol|сбп/.test(text))return 'Поступление · перевод';
+ return 'Поступление';
+}
+export function classifyExpense(t){
+ const text=(String(t.category||'')+' '+String(t.description||'')).toLowerCase().replace(/ё/g,'е');
+ const known=recognizeMerchant(t.description),playerok=known?.key==='playerok';
+ const qr=/(?:\bqr\b|куар|qr[- ]?код|сбп)/i.test(text);
+ const payment=Boolean(known)||/оплата|покупка|платеж|purchase|payment/i.test(text)||/(?:^|\s)(?:ооо|ао|ип)(?:\s|$)/u.test(text);
+ const transfer=/перевод|transfer/i.test(text)||(qr&&!payment);
+ let category;
+ if(known)category=known.category;
+ else if(transfer&&!payment)category='Переводы на карту';
+ else if(/продукт|супермаркет|бакале|пятероч|перекрест|магнит|вкусвилл/.test(text))category='Продукты';
+ else if(/ресторан|кафе|кофейн|coffee|фастфуд/.test(text))category='Кафе и рестораны';
+ else if(/транспорт|такси|метро|автобус|бензин|азс/.test(text))category='Транспорт';
+ else if(/жиль|жкх|коммунал|аренда|квартплат/.test(text))category='Жильё и ЖКХ';
+ else if(/связь|интернет|телефон|мобильн/.test(text))category='Связь и интернет';
+ else if(/здоров|аптек|медицин|клиник/.test(text))category='Здоровье';
+ else if(/образован|обучени|университет|институт|школ/.test(text))category='Образование';
+ else if(/подписк/.test(text))category='Подписки';
+ else if(/интернет.?магазин|интернет.?покуп|маркетплейс/.test(text))category='Интернет-покупки';
+ else if(qr&&payment)category='Оплата по QR / СБП';
+ else if(transfer)category='Переводы на карту';
+ else if(/покуп|магазин|оплата|платеж/.test(text))category='Покупки';
+ else category=t.category&&t.category!=='Без категории'?t.category:'Прочие расходы';
+ if(expenseCategories.includes(t.categoryOverride))category=t.categoryOverride;
+ return {category,reviewTransfer:category==='Переводы на карту',payment:playerok||payment||Boolean(t.categoryOverride&&category!=='Переводы на карту'),merchant:known?.label||null,source:t.categoryOverride?'Ваша категория':known?'Словарь получателей':'Описание и категория банка'};
+}
+export function merchant(t){
+ const known=recognizeMerchant(t.description);if(known)return 'known:'+known.key;
+ const normalized=(t.description||t.category).toLowerCase().replace(/ё/g,'е').replace(/операция по карте\s*[*\d]+/g,'').replace(/(?:карта|счет|card)\s*[*\d]+/g,'').replace(/\b\d{2}:\d{2}\b/g,'').replace(/(?:оплата|платеж|перевод)\s+(?:по\s+)?(?:qr|сбп)(?:[ -]код[ау]?)?/g,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+ // SBOL identifies a bank channel, not the actual recipient.
+ if(/^(?:sbol|сбол|перевод|перевод на карту|без описания)$/.test(normalized))return 'unknown:'+t.id;
+ return normalized;
+}
+export function detectRecurring(operations,confirmedKeys=[]){
+ const groups=new Map();for(const t of operations){if(t.amount>=0||t.ignored)continue;const key=merchant(t),confirmed=confirmedKeys.includes(key),classification=classifyExpense(t);if(!key||/без описания/i.test(key)||(!confirmed&&classification.reviewTransfer))continue;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(t);}
  const result=[];
- for(const [key,items] of groups){const a=[...items].sort((x,y)=>x.date.localeCompare(y.date));if(a.length<3)continue;const gaps=a.slice(1).map((t,i)=>dayNumber(t.date)-dayNumber(a[i].date));if(!gaps.every(n=>(n>=25&&n<=35)||(n>=55&&n<=65))||gaps.filter(n=>n>40).length>1)continue;
- const amounts=a.map(t=>Math.abs(t.amount)),m=median(amounts);if(Math.max(...amounts.map(n=>Math.abs(n-m)/m))>0.2)continue;
- result.push({id:'reg-'+result.length,key,label:a.at(-1).description,amount:Math.round(m),day:+a.at(-1).date.slice(8),lastDate:a.at(-1).date,operationIds:a.map(t=>t.id),count:a.length,active:true});}
+ for(const [key,items] of groups){const a=[...items].sort((x,y)=>x.date.localeCompare(y.date)),confirmed=confirmedKeys.includes(key);if(!confirmed&&a.length<3)continue;const gaps=a.slice(1).map((t,i)=>dayNumber(t.date)-dayNumber(a[i].date));if(!confirmed&&(!gaps.every(n=>(n>=25&&n<=35)||(n>=55&&n<=65))||gaps.filter(n=>n>40).length>1))continue;
+ const amounts=a.map(t=>Math.abs(t.amount)),m=median(amounts);if(!confirmed&&Math.max(...amounts.map(n=>Math.abs(n-m)/m))>0.2)continue;
+ result.push({id:'reg-'+result.length,key,label:a.at(-1).description,amount:Math.round(m),day:+a.at(-1).date.slice(8),lastDate:a.at(-1).date,operationIds:a.map(t=>t.id),count:a.length,confirmed,active:true});}
  return result;
 }
 export function occurrences(from,to,day){
@@ -89,8 +131,10 @@ export function occurrences(from,to,day){
 export function dailyEstimate(operations,recurring,start,end){
  const days=dayNumber(end)-dayNumber(start)+1;if(days<1)throw Error('Конец истории должен быть не раньше начала.');
  const excluded=new Set(recurring.flatMap(r=>r.operationIds));
- const total=operations.filter(t=>t.date>=start&&t.date<=end&&t.amount<0&&!t.ignored&&!excluded.has(t.id)).reduce((s,t)=>s-t.amount,0);
- return {days,total,daily:Math.round(total/days)};
+ const included=operations.filter(t=>t.date>=start&&t.date<=end&&t.amount<0&&!t.ignored&&!excluded.has(t.id)),groups=new Map();
+ for(const t of included){const category=classifyExpense(t).category,r=groups.get(category)||{category,total:0,count:0};r.total-=t.amount;r.count++;groups.set(category,r);}
+ const total=included.reduce((s,t)=>s-t.amount,0);
+ return {days,total,daily:Math.round(total/days),categories:[...groups.values()].sort((a,b)=>b.total-a.total).map(r=>({...r,daily:Math.round(r.total/days)}))};
 }
 export function forecast({balance,from,to,daily,reserve,purchase,recurring=[],obligations=[]}){
  dateISO(from);dateISO(to);const days=dayNumber(to)-dayNumber(from);if(days<1||days>366)throw Error('Дата дохода должна быть позже даты расчёта, в пределах года.');

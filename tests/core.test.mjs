@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {dateISO,cents,parseCSV,splitCSV,parseSberLines,detectRecurring,dailyEstimate,occurrences,forecast,toCSV} from '../dist/core.mjs';
+import {dateISO,cents,parseCSV,splitCSV,parseSberLines,detectRecurring,dailyEstimate,occurrences,forecast,toCSV,classifyExpense,classifyIncome,merchant,recognizeMerchant} from '../dist/core.mjs';
 const base={balance:3500000,from:'2026-11-12',to:'2026-11-30',daily:55000,reserve:500000,purchase:1200000,obligations:[{label:'Аренда',date:'2026-11-15',amount:1200000}]};
 test('dates are strict and leap years are respected',()=>{assert.equal(dateISO('29.02.2024'),'2024-02-29');assert.throws(()=>dateISO('29.02.2026'));assert.throws(()=>dateISO('2026-13-01'));});
 test('money parsing preserves cents and rejects ambiguity',()=>{assert.equal(cents('−1 234,56 ₽'),-123456);assert.equal(cents('0'),0);assert.throws(()=>cents(''));assert.throws(()=>cents('1.234'));assert.throws(()=>cents('1e5'));});
@@ -23,3 +23,30 @@ test('reserve boundary, zero inputs and negative balance',()=>{assert.equal(fore
 test('invalid/missing amounts and reversed dates block forecast',()=>{assert.throws(()=>forecast({...base,daily:-1}));assert.throws(()=>forecast({...base,reserve:NaN}));assert.throws(()=>forecast({...base,to:base.from}));assert.throws(()=>forecast({...base,to:'2028-01-01'}));});
 test('recurring and manual schedules use dates within horizon',()=>{const r=forecast({...base,recurring:[{label:'Подписка',amount:50000,day:20,active:true}],obligations:[{label:'В день дохода',date:'2026-11-30',amount:500000},{label:'До расчёта',date:'2026-11-10',amount:99999}]});assert.equal(r.mandatory,50000);assert.equal(r.schedule.length,1);});
 test('inactive monthly obligations are excluded from forecast',()=>{assert.equal(forecast({...base,obligations:[],recurring:[{label:'Закрыта',amount:50000,day:20,active:false}]}).mandatory,0);});
+test('QR payments identify merchants without treating SBP as a personal transfer',()=>{
+ for(const [description,category] of [['PLAYEROK. Операция по карте ****0000','Интернет-покупки'],['Goodline. Операция по карте ****0000','Связь и интернет'],['Бегемаг-22. Операция по карте ****0000','Продукты']]){
+  const c=classifyExpense({description,category:'Оплата по QR–коду СБП',amount:-10000});assert.equal(c.category,category);assert.equal(c.reviewTransfer,false);
+ }
+ assert.equal(classifyExpense({description:'ООО МПЦ РИУ',category:'Оплата по QR–коду СБП'}).reviewTransfer,false);
+ assert.equal(classifyExpense({description:'SBOL. Операция по карте ****0000',category:'Перевод на карту'}).reviewTransfer,true);
+});
+test('known merchant aliases group across card suffixes but do not match substrings',()=>{
+ assert.equal(merchant({description:'Goodline. Операция по карте ****0000'}),merchant({description:'ГУДЛАЙН. Операция по карте ****9999'}));
+ assert.equal(recognizeMerchant('NOTPLAYEROK'),null);assert.equal(recognizeMerchant('PLAYEROK.COM').key,'playerok');
+ assert.notEqual(merchant({id:'a',description:'SBOL. Операция по карте ****0000'}),merchant({id:'b',description:'SBOL. Операция по карте ****0000'}));
+});
+test('organization QR payments can recur, one-off purchases need manual confirmation',()=>{
+ const ops=rent().map(t=>({...t,description:'ООО МПЦ РИУ',category:'Оплата по QR–коду СБП'}));assert.equal(detectRecurring(ops).length,1);
+ const single=ops.slice(0,1);assert.equal(detectRecurring(single).length,0);const r=detectRecurring(single,[merchant(single[0])]);assert.equal(r.length,1);assert.equal(r[0].confirmed,true);
+ assert.equal(dailyEstimate(single,r,'2026-08-01','2026-08-31').total,0);
+ const transfers=rent().map(t=>({...t,description:'SBOL. Операция по карте ****0000',category:'Перевод на карту'}));assert.equal(detectRecurring(transfers).length,0);
+});
+test('scholarships are income and incoming transfers are receipts, neither are spending',()=>{
+ const scholarship={id:'income',date:'2026-10-02',amount:2000000,description:'Стипендия учащимся',category:'Прочие операции'};
+ assert.equal(classifyIncome(scholarship),'Доход · стипендия');assert.equal(classifyIncome({description:'SBOL',category:'Перевод на карту'}),'Поступление · перевод');assert.equal(dailyEstimate([scholarship],[],'2026-10-01','2026-10-31').total,0);
+});
+test('category breakdown reconciles spending and respects edits, regular and ignored rows',()=>{
+ const ops=[{id:'shop',date:'2026-10-01',amount:-30000,description:'PLAYEROK',category:'Оплата по QR–коду СБП'}, {id:'transfer',date:'2026-10-02',amount:-60000,description:'SBOL',category:'Перевод на карту'}, {id:'ignored',date:'2026-10-02',amount:-99999,ignored:true}, {id:'regular',date:'2026-10-03',amount:-99999}];
+ const r=dailyEstimate(ops,[{operationIds:['regular']}],'2026-10-01','2026-10-30');assert.equal(r.total,90000);assert.equal(r.categories.reduce((s,c)=>s+c.total,0),r.total);assert.equal(r.categories.find(c=>c.category==='Интернет-покупки').daily,1000);
+ assert.equal(classifyExpense({...ops[1],categoryOverride:'Образование'}).category,'Образование');assert.equal(classifyExpense({...ops[1],categoryOverride:'<invalid>'}).category,'Переводы на карту');
+});
