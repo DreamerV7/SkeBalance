@@ -12,11 +12,11 @@
   <meta property="og:description" content="Финансовый разбор для студентов. Проверь, на что хватит денег между поступлениями.">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.supabase.co; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>Soul · Бюджет на неделю</title>
-  <link rel="icon" type="image/png" href="./soul-flame-small.png?v=2">
+  <link rel="icon" type="image/png" href="./soul-king-icon.png">
   <link rel="stylesheet" href="./style.css">
-  <link rel="stylesheet" href="./soul.css?v=profile-1">
+  <link rel="stylesheet" href="./soul.css?v=king-1">
   <script type="module" src="./soul.mjs?v=profile-1"></script>
-  <script type="module" src="./flame.mjs"></script>
+  <script type="module" src="./king.mjs"></script>
   <script defer src="./config.js"></script>
   <script defer src="./vendor/supabase.js"></script>
   <script type="module" src="./app.mjs"></script>
@@ -53,12 +53,13 @@
       <div class="example-total"><dt>Остаток после трат</dt><dd>800&nbsp;₽</dd></div>
     </dl>
     <div class="hero-actions">
-      <a class="button" href="#profile">Разобрать свой бюджет</a>
+      <a id="profile-entry" class="button" href="#profile">Разобрать свой бюджет</a>
     </div>
+    <p id="entry-message" class="entry-message" role="status" aria-live="polite"></p>
   </div>
-  <div class="flame-stage">
-    <img src="./soul-flame.png?v=2" srcset="./soul-flame-small.png?v=2 512w, ./soul-flame.png?v=2 1254w" sizes="(max-width: 620px) 56vw, (max-width: 1440px) 35vw, 490px" width="1254" height="1254" alt="Розовый пиксельный огонёк Soul">
-    <canvas class="flame-model" width="256" height="256" aria-hidden="true"></canvas>
+  <div class="king-stage">
+    <img src="./soul-king.png" width="576" height="576" alt="Король в маске, короне и кобальтово-розовом плаще">
+    <canvas class="king-model" width="288" height="288" aria-hidden="true"></canvas>
   </div>
  </div>
 </section>

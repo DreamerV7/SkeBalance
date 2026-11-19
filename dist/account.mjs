@@ -45,6 +45,7 @@ export function readableError(error){
 }
 export async function initAccount({capture,restore}){
  let client=null,user=null,mode='login',revision=0,runs=[],valid=false,ready=false;
+ let loginOpen = false;
  const example = $('example');
  const profile = $('profile');
  const panel = $('account-panel');
@@ -54,7 +55,11 @@ export async function initAccount({capture,restore}){
  const config = window.SKEBALANCE_CONFIG || {};
  const yandexCallback = readYandexCallback();
  const yandexEnabled = config.yandexLoginEnabled === true;
- function message(text,error=false){const status=$(user?'profile-message':'account-message');status.textContent=text;status.classList.toggle('error',error);}
+ function message(text,error=false){
+  const status = $(user ? 'profile-message' : loginOpen ? 'account-message' : 'entry-message');
+  status.textContent = text;
+  status.classList.toggle('error', error);
+ }
  function renderRoute(scroll = false, accountChanged = false) {
   const wantsProfile = profileSections.has(location.hash);
   const showProfile = wantsProfile && !!user;
@@ -62,7 +67,7 @@ export async function initAccount({capture,restore}){
   const wasPanelHidden = panel.hidden;
   example.hidden = showProfile;
   profile.hidden = profile.inert = !showProfile;
-  panel.hidden = !ready || !wantsProfile || !!user;
+  panel.hidden = !ready || !loginOpen || !wantsProfile || !!user;
   toggle.setAttribute('aria-controls', user ? 'profile' : 'account-panel');
   toggle.setAttribute('aria-expanded', String(showProfile || !panel.hidden));
   if (enteringProfile) setTimeout(() => {
@@ -86,6 +91,21 @@ export async function initAccount({capture,restore}){
   }
   renderRoute(true);
  }
+ function enterProfile() {
+  if (user) {
+   goTo('#profile');
+   return;
+  }
+  loginOpen = true;
+  $('entry-message').textContent = '';
+  setMode('login');
+  goTo(profileSections.has(location.hash) ? location.hash : '#profile');
+ }
+ function closeLogin() {
+  loginOpen = false;
+  goTo('');
+  toggle.focus({preventScroll: true});
+ }
  function setMode(next){mode=next;$('login-mode').setAttribute('aria-pressed',String(mode==='login'));$('signup-mode').setAttribute('aria-pressed',String(mode==='signup'));$('account-submit').textContent=mode==='signup'?'Создать аккаунт':'Войти';$('account-password').autocomplete=mode==='signup'?'new-password':'current-password';$('account-password').minLength=mode==='signup'?12:1;$('password-hint').hidden=mode!=='signup';message('');}
  function saveLabel(){ $('save-calculation').disabled=!user||!valid; }
  function renderRuns(){
@@ -103,6 +123,7 @@ export async function initAccount({capture,restore}){
   const firstSession = !ready;
   ready = true;
   user = next;
+  if (user) loginOpen = false;
   if (changed) {
    revision++;
    runs = [];
@@ -122,9 +143,14 @@ export async function initAccount({capture,restore}){
   } else if (!user && previousUserId) goTo('', true);
   else renderRoute(firstSession || changed, changed);
  }
- window.addEventListener('hashchange', () => renderRoute(true));
- toggle.addEventListener('click', () => goTo(!panel.hidden ? '' : '#profile'));
- $('account-close').addEventListener('click',()=>{goTo('');toggle.focus({preventScroll:true});});
+ window.addEventListener('hashchange', () => {loginOpen = false; renderRoute(true);});
+ toggle.addEventListener('click', () => loginOpen ? closeLogin() : enterProfile());
+ $('account-close').addEventListener('click', closeLogin);
+ $('profile-entry').addEventListener('click', event => {
+  if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  enterProfile();
+ });
  $('skip-content').addEventListener('click', event => {
   event.preventDefault();
   $('main').focus();
@@ -179,7 +205,7 @@ export async function initAccount({capture,restore}){
     },
    });
    if (error || !data.url) throw error || new Error('Missing authorize URL');
-   if (user) {
+   if (user || !loginOpen) {
     yandexButton.disabled = false;
     return;
    }
@@ -196,6 +222,8 @@ export async function initAccount({capture,restore}){
   if (!event.persisted || !yandexButton.disabled) return;
   yandexButton.disabled = false;
   sessionStorage.removeItem(yandexPendingKey);
+  loginOpen = false;
+  renderRoute();
   message('');
  });
 
