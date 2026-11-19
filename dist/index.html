@@ -14,8 +14,8 @@
   <title>Soul · Бюджет на неделю</title>
   <link rel="icon" type="image/png" href="./soul-king-icon.png?v=2">
   <link rel="stylesheet" href="./style.css">
-  <link rel="stylesheet" href="./soul.css?v=king-1">
-  <script type="module" src="./soul.mjs?v=profile-1"></script>
+  <link rel="stylesheet" href="./soul.css?v=profile-3">
+  <script type="module" src="./soul.mjs?v=profile-3"></script>
   <script type="module" src="./king.mjs?v=2"></script>
   <script defer src="./config.js"></script>
   <script defer src="./vendor/supabase.js"></script>
@@ -65,16 +65,41 @@
 </section>
 <div id="profile" hidden inert>
  <section class="profile-overview wrap" aria-labelledby="profile-heading">
+  <a id="profile-back" class="profile-back" href="#profile" hidden>Все разделы</a>
   <div class="profile-heading-row">
    <h1 id="profile-heading" tabindex="-1">Личный профиль</h1>
    <div id="account-user" class="account-user"><span id="account-user-email"></span><button id="signout" class="text-button" type="button">Выйти</button></div>
   </div>
-  <nav class="shell-nav" aria-label="Разделы профиля"><a href="#journal">Разбор недели</a><a href="#inflation">Инфляция</a><a href="#tools">Прогноз</a><a href="#saved-section">Сохранённые расчёты</a></nav>
   <p id="profile-message" class="account-message" role="status" aria-live="polite"></p>
   <form id="password-update-form" class="account-form" hidden><label>Новый пароль<input id="new-password" type="password" autocomplete="new-password" required minlength="12" maxlength="128"></label><button id="password-update-submit" type="submit" class="button">Обновить пароль</button></form>
-  <section id="saved-section" aria-labelledby="saved-heading"><div class="saved-heading"><h2 id="saved-heading">Сохранённые расчёты</h2><button id="refresh-saved" type="button" class="text-button">Обновить список</button></div><ul id="saved-list" class="saved-list"></ul></section>
  </section>
-<section id="journal" class="journal-section soul-embers" aria-labelledby="journal-heading">
+ <nav id="profile-sections" class="profile-cards wrap" aria-label="Разделы профиля" data-profile-view hidden>
+  <a class="profile-card" href="#journal">
+   <img class="profile-card-icon" src="./soul-calendar.png" alt="" width="48" height="48">
+   <span class="profile-card-title">Разбор недели</span>
+   <span class="profile-card-detail">Спланируй траты и выбери следующий шаг.</span>
+  </a>
+  <a class="profile-card" href="#inflation">
+   <img class="profile-card-icon" src="./soul-inflation.png" alt="" width="48" height="48">
+   <span class="profile-card-title">Личная инфляция</span>
+   <span class="profile-card-detail">Сравни стоимость одной и той же корзины.</span>
+  </a>
+  <a class="profile-card" href="#tools">
+   <img class="profile-card-icon" src="./soul-receipt.png" alt="" width="48" height="48">
+   <span class="profile-card-title">Прогноз по выписке</span>
+   <span class="profile-card-detail">Узнай, сколько останется до следующего дохода.</span>
+  </a>
+  <a class="profile-card" href="#saved-section">
+   <span class="profile-card-icon saved-card-icon" aria-hidden="true"></span>
+   <span class="profile-card-title">Сохранённые расчёты</span>
+   <span class="profile-card-detail">Открой расчёт и вернись к его параметрам.</span>
+  </a>
+ </nav>
+ <section id="saved-section" class="saved-view wrap" aria-labelledby="saved-heading" data-profile-view hidden>
+  <div class="saved-heading"><h2 id="saved-heading" tabindex="-1">Сохранённые расчёты</h2><button id="refresh-saved" type="button" class="text-button">Обновить список</button></div>
+  <ul id="saved-list" class="saved-list"></ul>
+ </section>
+<section id="journal" class="journal-section soul-embers" aria-labelledby="journal-heading" data-profile-view hidden>
  <div class="wrap">
   <div class="journal-heading">
     <div class="soul-section-title">
@@ -134,11 +159,11 @@
   </section>
  </div>
 </section>
-<section id="inflation" class="inflation-section soul-embers" aria-labelledby="inflation-heading">
+<section id="inflation" class="inflation-section soul-embers" aria-labelledby="inflation-heading" data-profile-view hidden>
  <div class="inflation-grid wrap">
   <div>
     <div class="soul-section-title">
-      <h2 id="inflation-heading">Личная инфляция</h2>
+      <h2 id="inflation-heading" tabindex="-1">Личная инфляция</h2>
       <img src="./soul-inflation.png" alt="" width="48" height="48">
     </div>
     <p>Один и тот же набор покупок может дорожать быстрее или медленнее, чем в среднем по стране. Измени стоимость своей корзины и посмотри, как считается разница.</p>
@@ -159,11 +184,11 @@
   </div>
  </div>
 </section>
-<section class="tools-section soul-embers" id="tools" aria-labelledby="tools-heading">
+<section class="tools-section soul-embers" id="tools" aria-labelledby="tools-heading" data-profile-view hidden>
  <div class="wrap">
  <div class="tools-heading">
   <div class="soul-section-title">
-    <h2 id="tools-heading">Прогноз по выписке</h2>
+    <h2 id="tools-heading" tabindex="-1">Прогноз по выписке</h2>
     <img src="./soul-receipt.png" alt="" width="48" height="48">
   </div>
   <p>Если планируешь покупку, проверь, сколько останется до следующего дохода с учётом регулярных платежей.</p>
@@ -198,6 +223,7 @@
  </section>
  </div>
 </section>
+<canvas id="profile-burn" class="profile-burn" aria-hidden="true" hidden></canvas>
 </div>
 </main>
 <footer class="site-footer closing">

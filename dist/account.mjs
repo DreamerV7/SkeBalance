@@ -1,10 +1,16 @@
 import {cleanSnapshot,resultForSnapshot} from './snapshot.mjs';
+import {createProfileBurn} from './profile-burn.mjs';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:2}).format(n/100);
 const yandexProvider = 'custom:yandex';
 const yandexPendingKey = 'skebalance-yandex-signin';
-const profileSections = new Set(['#profile', '#saved-section', '#journal', '#inflation', '#tools', '#upload', '#review', '#forecast']);
+const profileRoutes = new Map([
+ ['#profile', 'profile-sections'], ['#journal', 'journal'], ['#inflation', 'inflation'],
+ ['#tools', 'tools'], ['#upload', 'tools'], ['#review', 'tools'], ['#forecast', 'tools'],
+ ['#saved-section', 'saved-section'],
+]);
+const profileDestination = hash => profileRoutes.has(hash) ? hash : '#profile';
 
 function readYandexCallback() {
  const url = new URL(location.href);
@@ -48,6 +54,9 @@ export async function initAccount({capture,restore}){
  let loginOpen = false;
  const example = $('example');
  const profile = $('profile');
+ const profileViews = [...profile.querySelectorAll('[data-profile-view]')];
+ const burn = createProfileBurn($('profile-burn'));
+ let activeView = null;
  const panel = $('account-panel');
  const toggle = $('account-toggle');
  const yandex = $('account-yandex');
@@ -61,23 +70,36 @@ export async function initAccount({capture,restore}){
   status.classList.toggle('error', error);
  }
  function renderRoute(scroll = false, accountChanged = false) {
-  const wantsProfile = profileSections.has(location.hash);
+  const viewId = profileRoutes.get(location.hash);
+  const wantsProfile = !!viewId;
   const showProfile = wantsProfile && !!user;
-  const enteringProfile = showProfile && (profile.hidden || accountChanged);
+  const previousView = activeView;
+  activeView = showProfile ? $(viewId) : null;
+  const changedView = previousView !== activeView;
   const wasPanelHidden = panel.hidden;
   example.hidden = showProfile;
   profile.hidden = profile.inert = !showProfile;
+  for (const view of profileViews) view.hidden = view !== activeView;
+  $('profile-back').hidden = !activeView || viewId === 'profile-sections';
   panel.hidden = !ready || !loginOpen || !wantsProfile || !!user;
   toggle.setAttribute('aria-controls', user ? 'profile' : 'account-panel');
   toggle.setAttribute('aria-expanded', String(showProfile || !panel.hidden));
-  if (enteringProfile) setTimeout(() => {
-   if (!profile.hidden) loadRuns().catch(error => message(readableError(error), true));
+  if (viewId === 'saved-section' && activeView && (changedView || accountChanged)) setTimeout(() => {
+   if (activeView?.id === 'saved-section') loadRuns().catch(error => message(readableError(error), true));
   }, 0);
+  if (changedView) {
+   if (previousView && activeView && scroll) burn.play(viewId === 'profile-sections');
+   else burn.stop();
+  }
   if (!scroll) return;
   if (showProfile) {
    const target = $(location.hash.slice(1));
-   (target.hidden ? profile : target).scrollIntoView({block: 'start'});
-   if (location.hash === '#profile') $('profile-heading').focus({preventScroll: true});
+   if (viewId === 'tools' && target !== activeView && !target.hidden) target.scrollIntoView({block: 'start', behavior: 'instant'});
+   else window.scrollTo({top: 0, behavior: 'instant'});
+   if (changedView) {
+    const heading = $(activeView.getAttribute('aria-labelledby') || 'profile-heading');
+    heading.focus({preventScroll: true});
+   }
   } else if (!panel.hidden) {
    panel.scrollIntoView({block: 'start'});
    if (wasPanelHidden) (yandex.hidden ? $('account-email') : yandexButton).focus({preventScroll: true});
@@ -99,7 +121,7 @@ export async function initAccount({capture,restore}){
   loginOpen = true;
   $('entry-message').textContent = '';
   setMode('login');
-  goTo(profileSections.has(location.hash) ? location.hash : '#profile');
+  goTo(profileDestination(location.hash));
  }
  function closeLogin() {
   loginOpen = false;
@@ -158,7 +180,7 @@ export async function initAccount({capture,restore}){
  $('login-mode').addEventListener('click',()=>setMode('login'));$('signup-mode').addEventListener('click',()=>setMode('signup'));
  window.addEventListener('skebalance:calculation',e=>{valid=!!e.detail?.valid;saveLabel();$('save-message').textContent='';});
  $('account-form').addEventListener('submit',async e=>{e.preventDefault();if(!client){message('Вход пока недоступен. Можно посмотреть учебный пример на главной.',true);return;}if(!$('account-form').reportValidity())return;
-  const epoch=revision,submittedMode=mode,email=$('account-email').value.trim(),password=$('account-password').value,destination=profileSections.has(location.hash)?location.hash:'#profile';$('account-submit').disabled=true;message(submittedMode==='signup'?'Создаём аккаунт…':'Входим…');
+  const epoch=revision,submittedMode=mode,email=$('account-email').value.trim(),password=$('account-password').value,destination=profileDestination(location.hash);$('account-submit').disabled=true;message(submittedMode==='signup'?'Создаём аккаунт…':'Входим…');
   try{const result=submittedMode==='signup'?await client.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}}):await client.auth.signInWithPassword({email,password});if(result.error)throw result.error;
    $('account-password').value='';if(submittedMode==='signup'&&!result.data.session)message('Проверьте почту: перейдите по ссылке подтверждения, затем войдите.');else {goTo(destination);message('Вы вошли в личный профиль.');}
   }catch(err){if(epoch===revision)message(readableError(err),true);}finally{$('account-submit').disabled=false;}
@@ -174,7 +196,7 @@ export async function initAccount({capture,restore}){
   catch(e){if(epoch===revision)$('save-message').textContent=readableError(e);}finally{saveLabel();}
  });
  $('saved-list').addEventListener('click',async e=>{const openId=e.target.closest('[data-open-run]')?.dataset.openRun,deleteId=e.target.closest('[data-delete-run]')?.dataset.deleteRun;
-  if(openId){const r=runs.find(r=>r.id===openId);if(!r)return;try{restore(cleanSnapshot(r.snapshot));$('save-name').value=r.name;message('Расчёт открыт. Исходная выписка не сохранялась.');}catch(err){message(err.message,true);}return;}
+  if(openId){const r=runs.find(r=>r.id===openId);if(!r)return;try{restore(cleanSnapshot(r.snapshot));$('save-name').value=r.name;goTo('#forecast');message('Расчёт открыт. Исходная выписка не сохранялась.');}catch(err){message(err.message,true);}return;}
   if(deleteId){const r=runs.find(r=>r.id===deleteId);if(!r||!confirm('Удалить сохранённый расчёт «'+r.name+'»?'))return;const epoch=revision;e.target.disabled=true;
    try{const {error}=await client.from('saved_calculations').delete().eq('id',deleteId);if(error)throw error;if(epoch!==revision)return;runs=runs.filter(r=>r.id!==deleteId);renderRuns();message('Расчёт удалён.');}catch(err){if(epoch===revision)message(readableError(err),true);}finally{if(e.target.isConnected)e.target.disabled=false;}
   }
@@ -210,7 +232,7 @@ export async function initAccount({capture,restore}){
     return;
    }
    sessionStorage.setItem(yandexPendingKey, JSON.stringify({
-    verifier, destination: profileSections.has(location.hash) ? location.hash : '#profile', started: Date.now(),
+    verifier, destination: profileDestination(location.hash), started: Date.now(),
    }));
    location.assign(data.url);
   } catch {
@@ -238,7 +260,7 @@ export async function initAccount({capture,restore}){
   const attempt = JSON.parse(pending);
   if (!/^[a-f0-9]{64}$/.test(attempt?.verifier ?? '') || !Number.isFinite(attempt.started) ||
       Date.now() - attempt.started > 30 * 60 * 1000) throw new Error('Missing OAuth attempt');
-  const destination = profileSections.has(attempt.destination) ? attempt.destination : '#profile';
+  const destination = profileDestination(attempt.destination);
   if (yandexCallback.denied) {
    goTo(destination);
    message('Вход через Яндекс отменён.');
@@ -258,7 +280,7 @@ export async function initAccount({capture,restore}){
   if (signedIn.error || !signedIn.data.session) throw new Error('Missing OAuth session');
   goTo(destination);
   if (attempt.draft) {
-   try { restore(attempt.draft, { draft: true }); $('save-name').value = attempt.name; } catch { /* Older drafts are optional. */ }
+   try { restore(attempt.draft, { draft: true }); $('save-name').value = attempt.name; goTo('#forecast', true); } catch { /* Older drafts are optional. */ }
   }
   message('Вы вошли через Яндекс.');
  } catch {

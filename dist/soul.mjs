@@ -47,17 +47,6 @@ let selectedGuidance = null;
 let isExample = false;
 let journalEdited = false;
 
-function updateCurrentSection() {
-  const hash = ['#upload', '#review', '#forecast'].includes(location.hash) ? '#tools' : location.hash;
-  for (const link of document.querySelectorAll('.shell-nav a')) {
-    if (link.hash === hash) link.setAttribute('aria-current', 'location');
-    else link.removeAttribute('aria-current');
-  }
-}
-
-window.addEventListener('hashchange', updateCurrentSection);
-updateCurrentSection();
-
 const emberStream = document.createElement('span');
 emberStream.className = 'soul-particles';
 emberStream.setAttribute('aria-hidden', 'true');

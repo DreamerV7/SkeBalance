@@ -7,6 +7,7 @@ const executablePath=process.env.BROWSER_EXECUTABLE||(process.platform==='win32'
 const baseUrl=`http://127.0.0.1:${process.env.PORT||4173}/`;
 const browser=await chromium.launch({executablePath,headless:true,args:['--disable-gpu']});
 const page=await browser.newPage({viewport:{width:1440,height:1100}});const errors=[];const requests=[];
+await page.emulateMedia({reducedMotion:'no-preference'});
 page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push(r.url()));
 await page.route('**/config.js',route=>route.fulfill({contentType:'text/javascript',body:
  "window.SKEBALANCE_CONFIG={supabaseUrl:'https://test-project.supabase.co',supabasePublishableKey:'sb_publishable_browser_test'};"}));
@@ -25,6 +26,34 @@ try{
  await page.screenshot({path:'qa/start-mobile.png',fullPage:true});
  await page.setViewportSize({width:1440,height:1100});
  await page.locator('#account-toggle').click();
+ await page.locator('#profile-sections').waitFor({state:'visible'});
+ assert.equal(await page.locator('.profile-card').count(),4);
+ assert.equal(await page.locator('#tools').isVisible(),false);
+ const footerColor=await page.locator('.site-footer').evaluate(footer=>getComputedStyle(footer).backgroundColor);
+ assert.equal(footerColor,'rgb(13, 25, 68)');
+ assert.equal(await page.locator('.topbar').evaluate(header=>header.getBoundingClientRect().width),1440);
+ await page.mouse.move(4,120);
+ await page.screenshot({path:'qa/profile-cards-desktop.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ assert.equal(await page.locator('.topbar').evaluate(header=>header.getBoundingClientRect().width),390);
+ await page.screenshot({path:'qa/profile-cards-mobile.png',fullPage:true});
+ await page.setViewportSize({width:1440,height:1100});
+ await page.evaluate(()=>{
+  const canvas=document.getElementById('profile-burn');
+  new MutationObserver(()=>{
+   if (!canvas.hidden) {
+    const data=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
+    if (data.some((value,index)=>index%4===3&&value>0)) document.documentElement.dataset.burnObserved='true';
+   }
+  }).observe(canvas,{attributes:true,attributeFilter:['hidden']});
+ });
+ await page.locator('.profile-card[href="#tools"]').click();
+ await page.waitForFunction(()=>document.documentElement.dataset.burnObserved==='true');
+ await page.screenshot({path:'qa/profile-burn-desktop.png'});
+ await page.locator('#profile-burn').waitFor({state:'hidden'});
+ assert.equal(await page.locator('#profile-sections').isVisible(),false);
+ assert.equal(await page.locator('#journal').isVisible(),false);
  await page.locator('#demo').click();await page.locator('#review').waitFor({state:'visible'});
  assert.equal(await page.locator('.regular-row').count(),3);
  await page.locator('#continue').click();assert.equal(await page.locator('#forecast').isVisible(),false);assert.match(await page.locator('#alert').textContent(),/Подтвердите/);
@@ -77,6 +106,16 @@ try{
  await page.locator('#balance').fill('30000');await page.locator('#reserve').fill('5000');assert.notEqual(await page.locator('#safe-amount').textContent(),'—');
  await page.locator('.transactions').evaluate(el=>el.open=true);await page.locator('[data-role="op-3"]').selectOption('daily');assert.equal(await page.locator('#confirmed').isChecked(),false);assert.equal(await page.locator('#forecast').isVisible(),false);assert.equal(await page.locator('#daily').inputValue(),'164.52');
  await page.screenshot({path:'qa/categories-desktop.png',fullPage:true});await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);await page.screenshot({path:'qa/categories-mobile.png',fullPage:true});
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await page.evaluate(()=>delete document.documentElement.dataset.burnObserved);
+ await page.locator('#profile-back').click();
+ await page.locator('#profile-sections').waitFor({state:'visible'});
+ assert.equal(await page.locator('#profile-burn').isVisible(),false);
+ assert.equal(await page.evaluate(()=>document.documentElement.dataset.burnObserved),undefined);
+ await page.locator('.profile-card[href="#tools"]').click();
+ await page.locator('#tools').waitFor({state:'visible'});
+ assert.equal(await page.locator('#file-label').textContent(),'separate.csv');
+ assert.equal(await page.locator('#profile-burn').isVisible(),false);
  assert.equal(requests.some(u=>!u.startsWith(baseUrl)&&!u.startsWith('blob:')),false);
  assert.deepEqual(errors,[]);
  console.log('Browser checks passed: demo, confirmation, purchase, missing inputs, manual payment, CSV import/export, ignored rows, XSS, mobile overflow, no external requests.');
