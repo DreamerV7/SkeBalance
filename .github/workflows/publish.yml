@@ -28,7 +28,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-          YANDEX_LOGIN_ENABLED: ${{ vars.YANDEX_LOGIN_ENABLED }}
+          YANDEX_LOGIN_ENABLED: ${{ vars.YANDEX_LOGIN_ENABLED || 'true' }}
         run: node scripts/build.mjs --require-account
       - name: Package site
         working-directory: dist

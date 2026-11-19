@@ -27,22 +27,22 @@
    ```
 
    Функция принимает токен Яндекса, проверяет его через Яндекс ID и сверяет `client_id` с настройкой проекта. Параметр `verify_jwt = false` в `supabase/config.toml` позволяет передать функции токен Яндекса вместо JWT Supabase. В ответе функции только `sub`, стабильный идентификатор пользователя для этого приложения.
-3. Включите в Supabase [пользовательский провайдер OAuth2](https://supabase.com/docs/guides/auth/custom-oauth-providers) с такими настройками.
+3. Включите в Supabase [пользовательский провайдер OAuth2](https://supabase.com/docs/guides/auth/custom-oauth-providers). В разделе **Configuration Method** выберите **Manual configuration**.
 
    | Поле | Значение |
    | --- | --- |
-   | Identifier | `custom:yandex` |
-   | Name | `Яндекс ID` |
+   | Provider Identifier | `yandex` после префикса `custom:` |
+   | Display Name | `Яндекс ID` |
    | Client ID, Client Secret | Со страницы приложения Яндекс OAuth |
+   | Issuer URL | `https://oauth.yandex.ru` |
    | Authorization URL | `https://oauth.yandex.ru/authorize` |
    | Token URL | `https://oauth.yandex.ru/token` |
    | UserInfo URL | `https://YOUR_PROJECT_REF.supabase.co/functions/v1/yandex-userinfo` |
-   | Allow sign-in without email | Включено |
-   | PKCE | Включено |
+   | Allow users without email | Включено |
 
-   Поле **Scopes** оставьте пустым, чтобы Яндекс использовал базовые права, выбранные при регистрации приложения. Client Secret вводится только в Supabase.
+   Поля **Scopes** и **JWKS URI** оставьте пустыми. При ручной настройке через Dashboard Supabase включает PKCE. Client Secret вводится только в Supabase.
 4. В **Authentication → URL Configuration → Redirect URLs** добавьте `https://skebalance.netlify.app/?auth=yandex`. Для локальной проверки добавьте `http://127.0.0.1:4173/?auth=yandex`.
-5. После настройки добавьте публичную переменную `YANDEX_LOGIN_ENABLED=true` в **GitHub Actions Repository variables** для способа A или в окружение сборки Netlify для способа B. Для локальной проверки в PowerShell задайте `$env:YANDEX_LOGIN_ENABLED = 'true'` рядом с двумя публичными настройками Supabase и выполните `npm run build`. Пересоберите сайт, чтобы появилась кнопка.
+5. При публикации способом A вход через Яндекс включён. Его можно отключить переменной `YANDEX_LOGIN_ENABLED=false` в **GitHub Actions Repository variables**. Для способа B добавьте `YANDEX_LOGIN_ENABLED=true` в окружение сборки Netlify. Для локальной проверки в PowerShell задайте `$env:YANDEX_LOGIN_ENABLED = 'true'` рядом с двумя публичными настройками Supabase и выполните `npm run build`.
 6. Проверьте вход и отмену входа на экране Яндекса. После успешного входа сохраните учебный расчёт, выйдите и войдите снова через тот же Яндекс ID. Сохранённый расчёт должен появиться в «Моих расчётах». Аккаунты с email и Яндекс ID создаются отдельно. Для доступа к ранее сохранённым расчётам выбирайте тот же способ входа.
 
 ## 3 Выбрать способ публикации
