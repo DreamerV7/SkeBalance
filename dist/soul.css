@@ -137,25 +137,29 @@ main:focus { outline: 2px solid var(--pink); outline-offset: -2px; }
 .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-top: 32px; }
 .hero-example { border: 0; background: none; color: white; text-decoration: underline; text-underline-offset: 5px; }
 .hero-example:hover { color: var(--pink); }
-.flame-stage { display: grid; place-items: center; position: relative; isolation: isolate; min-width: 0; }
-.flame-stage::before, .flame-stage::after { content: ""; position: absolute; pointer-events: none; }
+.flame-stage {
+  --ember-pixel: 8px;
+  --ember-inset: 14%;
+  --ember-start: 66%;
+  --ember-end: 61%;
+  --ember-rise: -82px;
+  --ember-shade: #f6bbd6;
+  --ember-highlight: #fff0f6;
+  display: grid;
+  place-items: center;
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+}
 .flame-stage::before {
+  content: "";
+  position: absolute;
+  pointer-events: none;
   z-index: -1;
   width: min(100%, 568px);
   aspect-ratio: 8 / 7;
   background: url("./soul-ember-field.png") center / 100% 100% no-repeat;
   image-rendering: pixelated;
-}
-.flame-stage::after {
-  --ember-drift: -12px;
-  --ember-rise: -68px;
-  right: 14%;
-  top: 57%;
-  width: 8px;
-  height: 8px;
-  background: #f6bbd6;
-  box-shadow: -14px -30px 0 -1px #dfa0c9, 15px 25px 0 -2px #fff0f6, 23px -20px 0 -2px #f3b8d2;
-  opacity: .65;
 }
 .flame-stage img { position: relative; width: min(91%, 485px); height: auto; }
 .soul-embers {
@@ -170,44 +174,45 @@ main:focus { outline: 2px solid var(--pink); outline-offset: -2px; }
   --ember-start: 166px;
   --ember-end: 114px;
 }
-.soul-embers::before, .soul-embers::after {
-  content: "";
+.soul-particles {
   position: absolute;
-  width: var(--ember-pixel);
-  height: var(--ember-pixel);
-  background: #d686ab;
-  box-shadow:
-    0 var(--ember-pixel) #bf638e,
-    0 calc(2 * var(--ember-pixel)) #e8aac6,
-    calc(-1 * var(--ember-pixel)) var(--ember-pixel) #e8aac6,
-    var(--ember-pixel) var(--ember-pixel) #efc4d9,
-    var(--ember-pixel) calc(-3 * var(--ember-pixel)) 0 -1px #788dc6,
-    calc(-1 * var(--ember-pixel)) calc(5 * var(--ember-pixel)) 0 -1px #d686ab;
-  opacity: .65;
+  inset: 0;
+  overflow: clip;
   pointer-events: none;
 }
-.soul-embers::before {
-  --ember-drift: -2px;
-  top: var(--ember-start);
-  left: var(--ember-inset);
+.soul-particles > span {
+  --ember-drift: -3px;
+  --ember-x: 0px;
+  --ember-y: 0px;
+  position: absolute;
+  top: calc(var(--ember-start) + var(--ember-y));
+  left: calc(var(--ember-inset) + var(--ember-x));
+  width: calc(var(--ember-pixel) - var(--ember-trim, 0px));
+  aspect-ratio: 1;
+  background: var(--ember-shade, #bf638e);
+  box-shadow: 1px 1px 0 var(--ember-highlight, #efc4d9);
+  animation: soul-ember-flight 4.8s linear var(--ember-delay) infinite var(--ember-play-state, paused);
 }
-.soul-embers::after {
-  --ember-drift: 2px;
-  --ember-delay: -1.2s;
-  top: var(--ember-end);
-  right: var(--ember-inset);
+.soul-particles > :nth-child(even) {
+  --ember-drift: 3px;
+  top: calc(var(--ember-end) + var(--ember-y));
+  right: calc(var(--ember-inset) + var(--ember-x));
+  left: auto;
 }
+.soul-particles > :nth-child(1) { --ember-delay: -.25s; }
+.soul-particles > :nth-child(2) { --ember-delay: -.95s; }
+.soul-particles > :nth-child(3) { --ember-delay: -1.85s; }
+.soul-particles > :nth-child(4) { --ember-delay: -2.55s; }
+.soul-particles > :nth-child(5) { --ember-delay: -3.45s; }
+.soul-particles > :nth-child(6) { --ember-delay: -4.15s; }
+.soul-particles > :is(:nth-child(3), :nth-child(4)) { --ember-x: 4px; --ember-y: 8px; --ember-trim: 2px; }
+.soul-particles > :is(:nth-child(5), :nth-child(6)) { --ember-x: -2px; --ember-y: -7px; --ember-trim: 1px; }
 [data-ember-motion="running"] { --ember-play-state: running; }
-[data-ember-motion] .flame-stage::after,
-[data-ember-motion] .soul-embers::before,
-[data-ember-motion] .soul-embers::after {
-  animation: soul-ember-float 4s steps(18, end) var(--ember-delay, 0s) infinite;
-  animation-play-state: var(--ember-play-state, paused);
-}
-@keyframes soul-ember-float {
-  0% { opacity: .65; transform: none; }
-  25% { opacity: 1; }
-  100% { opacity: .15; transform: translate(var(--ember-drift), var(--ember-rise, -52px)); }
+@keyframes soul-ember-flight {
+  0% { opacity: 0; transform: translate(0, 0); }
+  18% { opacity: .95; }
+  60% { opacity: .8; }
+  100% { opacity: 0; transform: translate(var(--ember-drift), var(--ember-rise, -64px)); }
 }
 .journal-heading { margin-bottom: 32px; }
 .journal-heading p { max-width: 660px; }
@@ -377,9 +382,8 @@ input:focus-visible, select:focus-visible { box-shadow: 0 0 0 2px var(--pink); }
   .hero-text > p { font-size: 1.125rem; }
   main h2 { font-size: 2.25rem; }
   .hero-actions { margin-top: 24px; gap: 8px 16px; }
-  .flame-stage { width: min(62vw, 280px); justify-self: center; }
+  .flame-stage { --ember-pixel: 6px; --ember-rise: -56px; width: min(62vw, 280px); justify-self: center; }
   .flame-stage::before { width: 116%; }
-  .flame-stage::after { --ember-rise: -48px; right: 10%; width: 6px; height: 6px; box-shadow: -8px -18px 0 -1px #dfa0c9, 9px 14px 0 -1px #fff0f6; }
   .soul-embers { --ember-pixel: 4px; }
   .soul-section-title img { width: 40px; height: 40px; }
   .journal-grid, .inflation-grid { grid-template-columns: 1fr; }
