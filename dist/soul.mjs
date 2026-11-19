@@ -56,27 +56,13 @@ function updateCurrentSection() {
 window.addEventListener('hashchange', updateCurrentSection);
 updateCurrentSection();
 
-const motionToggle = document.querySelector('#soul-motion-toggle');
-const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-
 const emberStream = document.createElement('span');
 emberStream.className = 'soul-particles';
 emberStream.setAttribute('aria-hidden', 'true');
 for (let index = 0; index < 6; index++) emberStream.append(document.createElement('span'));
-for (const scene of document.querySelectorAll('.flame-stage, .soul-embers > .wrap')) {
+for (const scene of document.querySelectorAll('.soul-embers > .wrap')) {
   scene.append(emberStream.cloneNode(true));
 }
-
-function setEmberMotion(running) {
-  document.documentElement.dataset.emberMotion = running ? 'running' : 'paused';
-  motionToggle.setAttribute('aria-pressed', String(running));
-  motionToggle.title = running ? 'Приостановить огоньки' : 'Запустить огоньки';
-}
-
-motionToggle.addEventListener('click', () => setEmberMotion(motionToggle.getAttribute('aria-pressed') === 'false'));
-reducedMotion.addEventListener?.('change', event => setEmberMotion(!event.matches));
-setEmberMotion(!reducedMotion.matches);
-motionToggle.disabled = false;
 
 function readEntries() {
   try {

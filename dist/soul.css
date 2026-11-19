@@ -74,33 +74,6 @@ main:focus { outline: 2px solid var(--pink); outline-offset: -2px; }
 }
 .topbar .secondary:hover { color: var(--blue); background: white; }
 .topbar #reset { color: var(--pink); }
-.motion-toggle {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 1px solid #8d9fd7;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--pink);
-}
-.motion-toggle:hover { background: #223b91; }
-.motion-toggle:disabled { visibility: hidden; }
-.motion-toggle::before {
-  content: "";
-  width: 12px;
-  height: 12px;
-  background: currentColor;
-  clip-path: polygon(25% 0, 100% 50%, 25% 100%);
-}
-.motion-toggle[aria-pressed="true"]::before {
-  background: transparent;
-  border-inline: 3px solid currentColor;
-  box-sizing: border-box;
-  clip-path: none;
-}
 .soul-hero {
   display: grid;
   align-content: center;
@@ -138,13 +111,6 @@ main:focus { outline: 2px solid var(--pink); outline-offset: -2px; }
 .hero-example { border: 0; background: none; color: white; text-decoration: underline; text-underline-offset: 5px; }
 .hero-example:hover { color: var(--pink); }
 .flame-stage {
-  --ember-pixel: 8px;
-  --ember-inset: 14%;
-  --ember-start: 66%;
-  --ember-end: 61%;
-  --ember-rise: -82px;
-  --ember-shade: #f6bbd6;
-  --ember-highlight: #fff0f6;
   display: grid;
   place-items: center;
   position: relative;
@@ -161,7 +127,18 @@ main:focus { outline: 2px solid var(--pink); outline-offset: -2px; }
   background: url("./soul-ember-field.png") center / 100% 100% no-repeat;
   image-rendering: pixelated;
 }
-.flame-stage img { position: relative; width: min(91%, 485px); height: auto; }
+.flame-stage > :is(img, canvas) { width: min(91%, 485px); aspect-ratio: 1; }
+.flame-stage img { position: relative; height: auto; }
+.flame-model {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  visibility: hidden;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+.flame-stage.is-burning > img { opacity: 0; }
+.flame-stage.is-burning > .flame-model { visibility: visible; }
 .soul-embers {
   --ember-pixel: 5px;
   --ember-inset: calc(max(var(--gutter), (100% - 1280px) / 2) - clamp(14px, 3vw, 44px));
@@ -189,9 +166,9 @@ main:focus { outline: 2px solid var(--pink); outline-offset: -2px; }
   left: calc(var(--ember-inset) + var(--ember-x));
   width: calc(var(--ember-pixel) - var(--ember-trim, 0px));
   aspect-ratio: 1;
-  background: var(--ember-shade, #bf638e);
-  box-shadow: 1px 1px 0 var(--ember-highlight, #efc4d9);
-  animation: soul-ember-flight 4.8s linear var(--ember-delay) infinite var(--ember-play-state, paused);
+  background: #bf638e;
+  box-shadow: 1px 1px 0 #efc4d9;
+  animation: soul-ember-flight 4.8s linear var(--ember-delay) infinite;
 }
 .soul-particles > :nth-child(even) {
   --ember-drift: 3px;
@@ -207,7 +184,6 @@ main:focus { outline: 2px solid var(--pink); outline-offset: -2px; }
 .soul-particles > :nth-child(6) { --ember-delay: -4.15s; }
 .soul-particles > :is(:nth-child(3), :nth-child(4)) { --ember-x: 4px; --ember-y: 8px; --ember-trim: 2px; }
 .soul-particles > :is(:nth-child(5), :nth-child(6)) { --ember-x: -2px; --ember-y: -7px; --ember-trim: 1px; }
-[data-ember-motion="running"] { --ember-play-state: running; }
 @keyframes soul-ember-flight {
   0% { opacity: 0; transform: translate(0, 0); }
   18% { opacity: .95; }
@@ -382,7 +358,7 @@ input:focus-visible, select:focus-visible { box-shadow: 0 0 0 2px var(--pink); }
   .hero-text > p { font-size: 1.125rem; }
   main h2 { font-size: 2.25rem; }
   .hero-actions { margin-top: 24px; gap: 8px 16px; }
-  .flame-stage { --ember-pixel: 6px; --ember-rise: -56px; width: min(62vw, 280px); justify-self: center; }
+  .flame-stage { width: min(62vw, 280px); justify-self: center; }
   .flame-stage::before { width: 116%; }
   .soul-embers { --ember-pixel: 4px; }
   .soul-section-title img { width: 40px; height: 40px; }
@@ -392,6 +368,7 @@ input:focus-visible, select:focus-visible { box-shadow: 0 0 0 2px var(--pink); }
   .inflation-form { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .soul-particles > span { animation-play-state: paused; }
   .soul-hero[data-enter] .hero-text,
   .soul-hero[data-enter] h1,
   :is(#journal, #inflation, #tools):target .soul-section-title h2,
