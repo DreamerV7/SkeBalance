@@ -3,9 +3,28 @@ const token=process.env.NETLIFY_AUTH_TOKEN,site=process.env.NETLIFY_SITE_ID;
 if(!token||!site)throw Error('Add NETLIFY_AUTH_TOKEN and NETLIFY_SITE_ID to GitHub Actions Secrets.');
 if(!/^[a-zA-Z0-9-]+$/.test(site))throw Error('NETLIFY_SITE_ID must be a project ID, not a URL.');
 const api='https://api.netlify.com/api/v1';
+function deployFailureHint(body) {
+ if (/deploy\s*limit|limit.{0,40}deploy|too many deploy|maximum (?:number of )?deploy/i.test(body)) return 'Netlify reports a deployment limit. Check the project deploy limits.';
+ if (/credit|quota|billing|usage limit|payment|bandwidth/i.test(body)) return 'Netlify reports a usage or billing limit. Check Usage & billing for the team.';
+ if (/paus|suspend|disabled|locked|locked_deploy/i.test(body)) return 'Netlify reports that the project, team or deployment is paused or locked.';
+ if (/not authorized|unauthorized|permission|access denied|forbidden|token|must be (?:an? )?owner/i.test(body)) return 'Netlify reports an access restriction. Check token permissions for this project.';
+ return 'Check the project settings, token permissions and team usage in Netlify.';
+}
 async function request(route,options={}){
- const response=await fetch(api+route,{...options,headers:{Authorization:'Bearer '+token,...options.headers},signal:AbortSignal.timeout(120000)});
- if(!response.ok)throw Error('Netlify API returned HTTP '+response.status+'. Check the project ID, token and account limits.');
+ const authorization = {Authorization:'Bearer '+token};
+ const response=await fetch(api+route,{...options,headers:{...authorization,...options.headers},signal:AbortSignal.timeout(120000)});
+ if (!response.ok) {
+  // Classify the response without writing any provider-supplied values to public CI logs.
+  const body = await response.text().catch(() => '');
+  const retryAfter = response.headers.get('retry-after');
+  const retryHint = /^\d{1,5}$/.test(retryAfter ?? '') ? ` Retry after ${retryAfter} seconds.` : '';
+  let accessHint = '';
+  if (response.status === 403 && options.method === 'POST') {
+   const project = await fetch(`${api}/sites/${site}`, {headers: authorization, signal: AbortSignal.timeout(10000)}).catch(() => null);
+   if (project) accessHint = ` Project lookup returned HTTP ${project.status}.`;
+  }
+  throw Error(`Netlify API returned HTTP ${response.status}. ${deployFailureHint(body)}${accessHint}${retryHint}`);
+ }
  return response.json();
 }
 let deployment=await request('/sites/'+site+'/deploys',{method:'POST',headers:{'Content-Type':'application/zip'},body:await fs.readFile(new URL('../site.zip',import.meta.url))});
