@@ -14,8 +14,8 @@
   <title>Soul · Бюджет на неделю</title>
   <link rel="icon" type="image/png" href="./soul-flame-small.png">
   <link rel="stylesheet" href="./style.css">
-  <link rel="stylesheet" href="./soul.css">
-  <script type="module" src="./soul.mjs"></script>
+  <link rel="stylesheet" href="./soul.css?v=motion-2">
+  <script type="module" src="./soul.mjs?v=motion-2"></script>
   <script defer src="./config.js"></script>
   <script defer src="./vendor/supabase.js"></script>
   <script type="module" src="./app.mjs"></script>
@@ -27,6 +27,7 @@
   <a class="brand" href="./" aria-label="Soul, главная">Soul</a>
   <nav class="shell-nav" aria-label="Разделы Soul"><a href="#journal">Разбор недели</a><a href="#inflation">Инфляция</a><a href="#tools">Прогноз</a></nav>
   <button id="account-toggle" class="secondary" type="button" aria-expanded="false" aria-controls="account-panel">Войти</button>
+  <button id="soul-motion-toggle" class="motion-toggle" type="button" aria-label="Анимация огоньков" aria-pressed="false" disabled></button>
   <button id="reset" class="text-button" type="button" hidden>Сбросить прогноз</button>
  </div>
 </header>

@@ -74,6 +74,33 @@ main:focus { outline: 2px solid var(--pink); outline-offset: -2px; }
 }
 .topbar .secondary:hover { color: var(--blue); background: white; }
 .topbar #reset { color: var(--pink); }
+.motion-toggle {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid #8d9fd7;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--pink);
+}
+.motion-toggle:hover { background: #223b91; }
+.motion-toggle:disabled { visibility: hidden; }
+.motion-toggle::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  clip-path: polygon(25% 0, 100% 50%, 25% 100%);
+}
+.motion-toggle[aria-pressed="true"]::before {
+  background: transparent;
+  border-inline: 3px solid currentColor;
+  box-sizing: border-box;
+  clip-path: none;
+}
 .soul-hero {
   display: grid;
   align-content: center;
@@ -98,12 +125,13 @@ main:focus { outline: 2px solid var(--pink); outline-offset: -2px; }
   text-wrap: balance;
 }
 .soul-hero[data-enter] h1 {
-  --title-ember: #f3b8d280;
-  animation: soul-title-warmth 840ms 200ms var(--ease-ui) both;
+  --title-ember: #f3b8d299;
+  --title-peak: #ffd7e8;
+  animation: soul-title-warmth 1120ms 160ms var(--ease-ui) both;
 }
 @keyframes soul-title-warmth {
   0%, 100% { text-shadow: 0 0 transparent; }
-  38% { text-shadow: 2px 2px 0 var(--title-ember); }
+  40% { color: var(--title-peak); text-shadow: 3px 3px 0 var(--title-ember); }
 }
 .hero-text > p { font-size: 1.25rem; line-height: 1.75rem; max-width: 42ch; margin: 0; color: #e6ecff; text-wrap: pretty; }
 .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-top: 32px; }
@@ -119,71 +147,67 @@ main:focus { outline: 2px solid var(--pink); outline-offset: -2px; }
   image-rendering: pixelated;
 }
 .flame-stage::after {
-  right: 17%;
-  top: 42%;
-  width: 5px;
-  height: 5px;
-  background: #e2a1c2;
-  box-shadow: -16px -39px 0 -1px #b978a1, 12px 27px 0 -1px #f3b8d2;
-  opacity: .7;
-  animation: soul-sparks-settle 1500ms var(--ease-ui) both;
-}
-@keyframes soul-sparks-settle {
-  0% { opacity: 0; transform: translate(-7px, 15px); }
-  40% { opacity: 1; }
-  100% { opacity: .7; transform: none; }
+  --ember-drift: -12px;
+  --ember-rise: -68px;
+  right: 14%;
+  top: 57%;
+  width: 8px;
+  height: 8px;
+  background: #f6bbd6;
+  box-shadow: -14px -30px 0 -1px #dfa0c9, 15px 25px 0 -2px #fff0f6, 23px -20px 0 -2px #f3b8d2;
+  opacity: .65;
 }
 .flame-stage img { position: relative; width: min(91%, 485px); height: auto; }
 .soul-embers {
-  --ember-pixel: 4px;
-  --ember-inset: calc(max(var(--gutter), (100% - 1280px) / 2) - clamp(11px, 3vw, 44px));
-  --ember-start: 94px;
-  --ember-end: 146px;
+  --ember-pixel: 5px;
+  --ember-inset: calc(max(var(--gutter), (100% - 1280px) / 2) - clamp(14px, 3vw, 44px));
+  --ember-start: 114px;
+  --ember-end: 166px;
   position: relative;
   padding-block: clamp(48px, 5.6vw, 80px);
 }
 .inflation-section {
-  --ember-start: 146px;
-  --ember-end: 94px;
+  --ember-start: 166px;
+  --ember-end: 114px;
 }
 .soul-embers::before, .soul-embers::after {
   content: "";
   position: absolute;
   width: var(--ember-pixel);
   height: var(--ember-pixel);
-  background: #e8abc6;
+  background: #d686ab;
   box-shadow:
-    0 var(--ember-pixel) #d98aaf,
-    0 calc(2 * var(--ember-pixel)) #f0ccdd,
-    calc(-1 * var(--ember-pixel)) var(--ember-pixel) #efc6da,
-    var(--ember-pixel) var(--ember-pixel) #f5dbe7,
-    calc(2 * var(--ember-pixel)) calc(-3 * var(--ember-pixel)) 0 -1px #a6b4dc,
-    calc(-2 * var(--ember-pixel)) calc(5 * var(--ember-pixel)) 0 -1px #df9cbb;
-  opacity: .7;
+    0 var(--ember-pixel) #bf638e,
+    0 calc(2 * var(--ember-pixel)) #e8aac6,
+    calc(-1 * var(--ember-pixel)) var(--ember-pixel) #e8aac6,
+    var(--ember-pixel) var(--ember-pixel) #efc4d9,
+    var(--ember-pixel) calc(-3 * var(--ember-pixel)) 0 -1px #788dc6,
+    calc(-1 * var(--ember-pixel)) calc(5 * var(--ember-pixel)) 0 -1px #d686ab;
+  opacity: .65;
   pointer-events: none;
 }
 .soul-embers::before {
-  --ember-drift: 2px;
+  --ember-drift: -2px;
   top: var(--ember-start);
   left: var(--ember-inset);
 }
 .soul-embers::after {
-  --ember-drift: -2px;
+  --ember-drift: 2px;
+  --ember-delay: -1.2s;
   top: var(--ember-end);
   right: var(--ember-inset);
 }
-@media (prefers-reduced-motion: no-preference) {
-  .soul-embers:target::before {
-    animation: soul-ember-float 3.8s steps(16, end) both;
-  }
-  .soul-embers:target::after {
-    animation: soul-ember-float 3.4s 240ms steps(14, end) both;
-  }
+[data-ember-motion="running"] { --ember-play-state: running; }
+[data-ember-motion] .flame-stage::after,
+[data-ember-motion] .soul-embers::before,
+[data-ember-motion] .soul-embers::after {
+  animation: soul-ember-float 4s steps(18, end) var(--ember-delay, 0s) infinite;
+  animation-play-state: var(--ember-play-state, paused);
 }
 @keyframes soul-ember-float {
-  0% { opacity: .7; transform: none; }
-  40% { opacity: 1; }
-  100% { opacity: .45; transform: translate(var(--ember-drift), -25px); }
+  0% { opacity: .65; transform: none; }
+  25% { opacity: 1; }
+  100% { opacity: .15; transform: translate(var(--ember-drift), var(--ember-rise, -52px)); }
 }
 .journal-heading { margin-bottom: 32px; }
 .journal-heading p { max-width: 660px; }
@@ -219,10 +243,11 @@ main h2 {
 }
 :is(#journal, #inflation, #tools):target .soul-section-title h2 {
   --title-ember: #dc9ab980;
-  animation: soul-title-warmth 650ms var(--ease-ui) both;
+  --title-peak: #81345c;
+  animation: soul-title-warmth 900ms var(--ease-ui) both;
 }
 :is(#journal, #inflation, #tools):target .soul-section-title::after {
-  animation: soul-embers-trail 650ms steps(8, end) both;
+  animation: soul-embers-trail 900ms steps(10, end) both;
 }
 @keyframes soul-embers-trail {
   0% { opacity: 0; transform: translateX(-5px); }
@@ -354,8 +379,8 @@ input:focus-visible, select:focus-visible { box-shadow: 0 0 0 2px var(--pink); }
   .hero-actions { margin-top: 24px; gap: 8px 16px; }
   .flame-stage { width: min(62vw, 280px); justify-self: center; }
   .flame-stage::before { width: 116%; }
-  .flame-stage::after { right: 10%; width: 4px; height: 4px; box-shadow: -7px -18px 0 -1px #b978a1, 8px 14px 0 -1px #f3b8d2; }
-  .soul-embers { --ember-pixel: 3px; }
+  .flame-stage::after { --ember-rise: -48px; right: 10%; width: 6px; height: 6px; box-shadow: -8px -18px 0 -1px #dfa0c9, 9px 14px 0 -1px #fff0f6; }
+  .soul-embers { --ember-pixel: 4px; }
   .soul-section-title img { width: 40px; height: 40px; }
   .journal-grid, .inflation-grid { grid-template-columns: 1fr; }
   .tools-section .steps { padding-inline: 8px; }
@@ -365,7 +390,6 @@ input:focus-visible, select:focus-visible { box-shadow: 0 0 0 2px var(--pink); }
 @media (prefers-reduced-motion: reduce) {
   .soul-hero[data-enter] .hero-text,
   .soul-hero[data-enter] h1,
-  .flame-stage::after,
   :is(#journal, #inflation, #tools):target .soul-section-title h2,
   :is(#journal, #inflation, #tools):target .soul-section-title::after { animation: none; }
   .button, .secondary, .hero-example { transition: none; }
