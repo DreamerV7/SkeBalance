@@ -8,9 +8,23 @@ const baseUrl=`http://127.0.0.1:${process.env.PORT||4173}/`;
 const browser=await chromium.launch({executablePath,headless:true,args:['--disable-gpu']});
 const page=await browser.newPage({viewport:{width:1440,height:1100}});const errors=[];const requests=[];
 page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push(r.url()));
+await page.route('**/config.js',route=>route.fulfill({contentType:'text/javascript',body:
+ "window.SKEBALANCE_CONFIG={supabaseUrl:'https://test-project.supabase.co',supabasePublishableKey:'sb_publishable_browser_test'};"}));
+await page.route('**/vendor/supabase.js',route=>route.fulfill({contentType:'text/javascript',body:`
+ window.supabase = { createClient: () => ({
+  auth: { onAuthStateChange: () => {}, getSession: async () => ({data: {session: {user: {id: 'browser-test'}}}}) },
+  from: () => ({select: () => ({order: () => ({limit: async () => ({data: []})})})}),
+ }) };
+`}));
 try{
- await page.goto(baseUrl);await page.locator('#demo').waitFor();await page.bringToFront();await page.evaluate(()=>new Promise(requestAnimationFrame));
+ await page.goto(baseUrl);await page.locator('#example').waitFor();await page.bringToFront();await page.evaluate(()=>new Promise(requestAnimationFrame));
+ assert.equal(await page.locator('#profile').isVisible(),false);
  await page.screenshot({path:'qa/start.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.screenshot({path:'qa/start-mobile.png',fullPage:true});
+ await page.setViewportSize({width:1440,height:1100});
+ await page.locator('#account-toggle').click();
  await page.locator('#demo').click();await page.locator('#review').waitFor({state:'visible'});
  assert.equal(await page.locator('.regular-row').count(),3);
  await page.locator('#continue').click();assert.equal(await page.locator('#forecast').isVisible(),false);assert.match(await page.locator('#alert').textContent(),/Подтвердите/);

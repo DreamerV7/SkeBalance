@@ -4,7 +4,9 @@ const historyList = document.querySelector('#week-history');
 const status = document.querySelector('#week-status');
 const exampleButton = document.querySelector('#journal-example');
 const exampleNote = document.querySelector('#journal-example-note');
-const storageKey = 'soul.weekly-actions.v1';
+const importButton = document.querySelector('#week-import');
+const legacyStorageKey = 'soul.weekly-actions.v1';
+let storageKey = null;
 const moneyFields = ['money', 'bills', 'essentials', 'joy', 'goals'];
 const formatMoney = cents => new Intl.NumberFormat('ru-RU', {
   style: 'currency', currency: 'RUB', maximumFractionDigits: 2,
@@ -40,7 +42,7 @@ const guidance = {
   },
 };
 
-let entries = readEntries();
+let entries = [];
 let selectedGuidance = null;
 let isExample = false;
 let journalEdited = false;
@@ -64,9 +66,10 @@ for (const scene of document.querySelectorAll('.soul-embers > .wrap')) {
   scene.append(emberStream.cloneNode(true));
 }
 
-function readEntries() {
+function readEntries(key) {
+  if (!key) return [];
   try {
-    const data = JSON.parse(localStorage.getItem(storageKey) ?? '[]');
+    const data = JSON.parse(localStorage.getItem(key) ?? '[]');
     if (!Array.isArray(data)) return [];
     return data.filter(entry => entry && typeof entry.id === 'string' &&
       typeof entry.action === 'string' && Number.isFinite(new Date(entry.date).getTime()) &&
@@ -77,6 +80,7 @@ function readEntries() {
 }
 
 function saveEntries(next, message) {
+  if (!storageKey) return false;
   try {
     localStorage.setItem(storageKey, JSON.stringify(next));
   } catch {
@@ -90,6 +94,7 @@ function saveEntries(next, message) {
 }
 
 function renderHistory() {
+  importButton.hidden = !storageKey || !readEntries(legacyStorageKey).length;
   document.querySelector('#week-history-empty').hidden = entries.length > 0;
   historyList.replaceChildren(...entries.map(entry => {
     const row = document.createElement('li');
@@ -143,6 +148,7 @@ function showAnalysis() {
 
 journal.addEventListener('submit', event => {
   event.preventDefault();
+  if (!storageKey) return;
   showAnalysis();
 });
 
@@ -154,16 +160,12 @@ function clearAnalysis() {
 
 journal.addEventListener('input', () => {
   journalEdited = true;
-  exampleButton.textContent = 'Вернуться к разбору';
+  exampleButton.hidden = true;
   clearAnalysis();
 });
 
 exampleButton.addEventListener('click', () => {
-  if (journalEdited) {
-    location.hash = 'journal';
-    journal.elements.money.focus();
-    return;
-  }
+  if (!storageKey || journalEdited) return;
   isExample = true;
   const sample = [7800, 2900, 2600, 1100, 400];
   moneyFields.forEach((name, index) => { journal.elements[name].value = sample[index]; });
@@ -172,14 +174,31 @@ exampleButton.addEventListener('click', () => {
   showAnalysis();
 });
 
-document.querySelector('#journal-example-clear').addEventListener('click', () => {
+function resetJournal() {
   journal.reset();
   isExample = false;
   journalEdited = false;
-  exampleButton.textContent = 'Открыть пример';
+  exampleButton.hidden = false;
   exampleNote.hidden = true;
   clearAnalysis();
+  actionForm.elements.action.replaceChildren();
+  for (const id of ['week-result-heading', 'week-result', 'week-total-available', 'week-total-planned', 'week-lesson']) {
+    document.getElementById(id).textContent = '';
+  }
+}
+
+document.querySelector('#journal-example-clear').addEventListener('click', () => {
+  resetJournal();
   journal.elements.money.focus();
+});
+
+importButton.addEventListener('click', () => {
+  const merged = new Map([...readEntries(legacyStorageKey), ...entries].map(entry => [entry.id, entry]));
+  const next = [...merged.values()].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 12);
+  if (saveEntries(next, 'Старые шаги перенесены в профиль.')) {
+    localStorage.removeItem(legacyStorageKey);
+    importButton.hidden = true;
+  }
 });
 
 actionForm.addEventListener('submit', event => {
@@ -194,8 +213,7 @@ actionForm.addEventListener('submit', event => {
 });
 
 const inflation = document.querySelector('#inflation-form');
-inflation.addEventListener('submit', event => {
-  event.preventDefault();
+function showInflation() {
   const before = inflation.elements.before.valueAsNumber;
   const after = inflation.elements.after.valueAsNumber;
   const official = inflation.elements.official.valueAsNumber;
@@ -207,6 +225,18 @@ inflation.addEventListener('submit', event => {
   document.querySelector('#inflation-comparison').textContent = diff === 0
     ? 'Совпадает с введённым показателем'
     : 'На ' + format.format(Math.abs(diff)) + ' п. п. ' + (diff > 0 ? 'выше' : 'ниже') + ' введённого показателя';
+}
+inflation.addEventListener('submit', event => {
+  event.preventDefault();
+  if (storageKey) showInflation();
 });
 
-renderHistory();
+window.addEventListener('skebalance:profile', ({ detail: { userId } }) => {
+  storageKey = userId ? `${legacyStorageKey}:${userId}` : null;
+  entries = readEntries(storageKey);
+  status.textContent = '';
+  resetJournal();
+  inflation.reset();
+  showInflation();
+  renderHistory();
+});

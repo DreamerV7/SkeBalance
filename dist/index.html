@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Soul помогает студентам разобрать бюджет на неделю, выбрать следующий шаг и проверить результат.">
+  <meta name="description" content="Посмотри на примере, как Soul разбирает бюджет на неделю. Свои расчёты можно сделать в личном профиле.">
   <meta name="page-type" content="software">
   <meta name="site-kind" content="software">
   <meta name="theme-color" content="#122B80">
@@ -14,8 +14,8 @@
   <title>Soul · Бюджет на неделю</title>
   <link rel="icon" type="image/png" href="./soul-flame-small.png?v=2">
   <link rel="stylesheet" href="./style.css">
-  <link rel="stylesheet" href="./soul.css?v=flame-3d">
-  <script type="module" src="./soul.mjs?v=flame-3d"></script>
+  <link rel="stylesheet" href="./soul.css?v=profile-1">
+  <script type="module" src="./soul.mjs?v=profile-1"></script>
   <script type="module" src="./flame.mjs"></script>
   <script defer src="./config.js"></script>
   <script defer src="./vendor/supabase.js"></script>
@@ -24,16 +24,14 @@
 <body>
 <header class="topbar nav">
  <div class="topbar-inner wrap">
-  <a class="skip-link" href="#main">Перейти к содержимому</a>
-  <a class="brand" href="./" aria-label="Soul, главная">Soul</a>
-  <nav class="shell-nav" aria-label="Разделы Soul"><a href="#journal">Разбор недели</a><a href="#inflation">Инфляция</a><a href="#tools">Прогноз</a></nav>
+  <a id="skip-content" class="skip-link" href="#main">Перейти к содержимому</a>
+  <a class="brand" href="#example" aria-label="Soul, главная">Soul</a>
   <button id="account-toggle" class="secondary" type="button" aria-expanded="false" aria-controls="account-panel">Войти</button>
-  <button id="reset" class="text-button" type="button" hidden>Сбросить прогноз</button>
  </div>
 </header>
 <main id="main" tabindex="-1">
  <section id="account-panel" class="account-panel" aria-labelledby="account-heading" hidden>
-  <div class="section-heading"><div><h2 id="account-heading">Ваши расчёты</h2><p id="account-connection">Расчётом можно пользоваться без регистрации.</p></div><button id="account-close" class="text-button" type="button">Закрыть</button></div>
+  <div class="section-heading"><div><h2 id="account-heading">Вход в профиль</h2><p id="account-connection">Войди, чтобы разобрать свой бюджет.</p></div><button id="account-close" class="text-button" type="button">Закрыть</button></div>
   <div id="account-message" class="account-message" role="status" aria-live="polite"></div>
   <div id="account-yandex" class="account-yandex" hidden>
    <button id="yandex-signin" class="button" type="button">Войти через Яндекс</button>
@@ -41,18 +39,21 @@
   </div>
   <div id="account-tabs" class="account-tabs" aria-label="Действие с аккаунтом"><button id="login-mode" type="button" aria-pressed="true">Вход</button><button id="signup-mode" type="button" aria-pressed="false">Регистрация</button></div>
   <form id="account-form" class="account-form"><label>Email<input id="account-email" type="email" autocomplete="username" required maxlength="254" placeholder="you@example.com"></label><label>Пароль<input id="account-password" type="password" autocomplete="current-password" required minlength="1" maxlength="128"></label><p id="password-hint" class="micro" hidden>Не менее 12 символов. Используйте отдельный пароль для этого аккаунта.</p><div class="account-form-actions"><button id="account-submit" type="submit" class="button">Войти</button><button id="forgot-password" type="button" class="text-button">Забыли пароль?</button></div></form>
-  <div id="account-user" class="account-user" hidden><span id="account-user-email"></span><button id="signout" class="text-button" type="button">Выйти</button></div>
-  <form id="password-update-form" class="account-form" hidden><label>Новый пароль<input id="new-password" type="password" autocomplete="new-password" required minlength="12" maxlength="128"></label><button id="password-update-submit" type="submit" class="button">Обновить пароль</button></form>
-  <div id="saved-section" hidden><div class="saved-heading"><h3>Сохранённые расчёты</h3><button id="refresh-saved" type="button" class="text-button">Обновить список</button></div><ul id="saved-list" class="saved-list"></ul><p class="micro">Показаны последние 20 расчётов. Сохраняются параметры и будущие платежи, без исходных выписок.</p></div>
  </section>
-<section class="soul-hero" aria-labelledby="soul-heading" data-enter>
+<section id="example" class="soul-hero" aria-labelledby="soul-heading" data-enter>
  <div class="hero-grid wrap">
   <div class="hero-text">
     <h1 id="soul-heading">Бюджет на неделю</h1>
-    <p>Разбор бюджета для студентов. Распредели траты по 4 категориям и узнай, на что хватит денег до конца недели.</p>
+    <p>Учебный пример. На неделю есть 7&nbsp;800&nbsp;₽.</p>
+    <dl class="example-breakdown">
+      <div><dt>Обязательные платежи</dt><dd>2&nbsp;900&nbsp;₽</dd></div>
+      <div><dt>Повседневные траты</dt><dd>2&nbsp;600&nbsp;₽</dd></div>
+      <div><dt>Удовольствие</dt><dd>1&nbsp;100&nbsp;₽</dd></div>
+      <div><dt>Цели</dt><dd>400&nbsp;₽</dd></div>
+      <div class="example-total"><dt>Остаток после трат</dt><dd>800&nbsp;₽</dd></div>
+    </dl>
     <div class="hero-actions">
-      <a class="button" href="#journal">Начать разбор <span aria-hidden="true">→</span></a>
-      <button class="hero-example" id="journal-example" type="button">Открыть пример</button>
+      <a class="button" href="#profile">Разобрать свой бюджет</a>
     </div>
   </div>
   <div class="flame-stage">
@@ -61,6 +62,17 @@
   </div>
  </div>
 </section>
+<div id="profile" hidden inert>
+ <section class="profile-overview wrap" aria-labelledby="profile-heading">
+  <div class="profile-heading-row">
+   <h1 id="profile-heading" tabindex="-1">Личный профиль</h1>
+   <div id="account-user" class="account-user"><span id="account-user-email"></span><button id="signout" class="text-button" type="button">Выйти</button></div>
+  </div>
+  <nav class="shell-nav" aria-label="Разделы профиля"><a href="#journal">Разбор недели</a><a href="#inflation">Инфляция</a><a href="#tools">Прогноз</a><a href="#saved-section">Сохранённые расчёты</a></nav>
+  <p id="profile-message" class="account-message" role="status" aria-live="polite"></p>
+  <form id="password-update-form" class="account-form" hidden><label>Новый пароль<input id="new-password" type="password" autocomplete="new-password" required minlength="12" maxlength="128"></label><button id="password-update-submit" type="submit" class="button">Обновить пароль</button></form>
+  <section id="saved-section" aria-labelledby="saved-heading"><div class="saved-heading"><h2 id="saved-heading">Сохранённые расчёты</h2><button id="refresh-saved" type="button" class="text-button">Обновить список</button></div><ul id="saved-list" class="saved-list"></ul></section>
+ </section>
 <section id="journal" class="journal-section soul-embers" aria-labelledby="journal-heading">
  <div class="wrap">
   <div class="journal-heading">
@@ -69,6 +81,7 @@
       <img src="./soul-calendar.png" alt="" width="48" height="48">
     </div>
     <p>Укажи, сколько денег у тебя на неделю и на что ты собираешься их потратить.</p>
+    <button class="text-button" id="journal-example" type="button">Заполнить учебный пример</button>
   </div>
   <div class="journal-grid">
     <form id="journal-form" class="journal-form">
@@ -114,6 +127,7 @@
   <section class="week-history" aria-labelledby="history-heading">
     <div><h3 id="history-heading">Записанные шаги</h3><p class="muted">Когда вернёшься к разбору, отметь, что получилось.</p></div>
     <p id="week-history-empty">Здесь появится первый шаг. Записи хранятся в этом браузере.</p>
+    <button id="week-import" class="text-button" type="button" hidden>Перенести старые шаги из этого браузера</button>
     <ul id="week-history"></ul>
     <p id="week-status" role="status"></p>
   </section>
@@ -152,6 +166,7 @@
     <img src="./soul-receipt.png" alt="" width="48" height="48">
   </div>
   <p>Если планируешь покупку, проверь, сколько останется до следующего дохода с учётом регулярных платежей.</p>
+  <button id="reset" class="text-button" type="button" hidden>Сбросить прогноз</button>
  </div>
 
  <nav class="steps" aria-label="Этапы расчёта"><a href="#upload" class="step active" id="step1"><span>1</span> Выписка</a><a href="#review" class="step" id="step2"><span>2</span> Расходы</a><a href="#forecast" class="step" id="step3"><span>3</span> Покупка</a></nav>
@@ -159,6 +174,7 @@
  <section id="upload" class="section upload-section"><div class="section-heading"><div><h3>Начнём с выписки</h3><p>История за 3–6 месяцев поможет увидеть повторяющиеся платежи.</p></div><span class="bank-label">Сбер · рублёвый счёт</span></div>
  <div class="upload-grid"><label id="dropzone" class="dropzone"><input id="file" type="file" accept=".pdf,.csv,text/csv,application/pdf"><svg width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M12 5h12l7 7v23H9V8a3 3 0 0 1 3-3Z" stroke="currentColor" stroke-width="1.6"/><path d="M23 5v8h8M20 29V18m-5 5 5-5 5 5" stroke="currentColor" stroke-width="1.6"/></svg><strong id="upload-title">Выберите или перетащите выписку</strong><span>PDF с текстом или CSV · до 15 МБ</span><span class="button small">Выбрать файл</span></label>
  <aside class="upload-help"><h4>Где взять файл</h4><p>В СберБанк Онлайн найдите «Выписки и справки» и закажите выписку по дебетовой карте или платёжному счёту за нужный период.</p><p class="muted">PDF-импорт поддерживает один текстовый шаблон. Скан, кредитная карта и другие шаблоны могут не распознаться.</p><div class="help-actions"><button id="demo" class="secondary" type="button">Попробовать на примере</button><button id="template" class="text-button" type="button">Скачать CSV-шаблон ↗</button></div><p class="micro">Пример содержит вымышленные операции. Персональные данные не нужны.</p></aside></div>
+ <p class="micro"><a href="https://digital.sber.ru/ru/person/help/statements_inquiry_faq" target="_blank" rel="noopener noreferrer">Как заказать выписку в Сбере</a></p>
  </section>
  <section id="review" class="section" hidden>
  <div class="section-heading"><div><p class="file-label" id="file-label"></p><h3>Проверим, что получилось</h3><p>Подтвердите период истории и платежи, прежде чем считать остаток.</p></div><button id="export" class="secondary" type="button">Скачать операции CSV</button></div>
@@ -175,15 +191,16 @@
  <div class="forecast-grid"><div class="forecast-inputs"><div class="fields two"><label>Дата расчёта<input id="from-display" type="date" readonly tabindex="-1"></label><label>Следующий доход<input id="to" type="date" required></label></div><label>Текущий баланс, ₽<input id="balance" type="number" step="0.01" inputmode="decimal" placeholder="Уточните в приложении банка" required></label><p class="micro" id="balance-note">Выписка могла устареть. Укажите баланс на начало даты расчёта, до расходов за этот день.</p><label>Оставить резерв, ₽<input id="reserve" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Сумма на непредвиденные траты" required></label><p class="micro">Резерв выбираете вы. Он уменьшает лимит покупки, но не считается потраченными деньгами.</p>
  <div class="obligations"><h4>Ещё обязательные расходы</h4><p class="micro">Добавьте то, чего нет среди повторяющихся платежей. Не дублируйте платежи и обычные расходы.</p><div id="manual-list"></div><button id="add-obligation" class="text-button" type="button">+ Добавить платёж</button></div>
  </div><div class="result-card"><p class="result-label">На дополнительную покупку</p><div id="safe-amount" class="big-number">—</div><p id="result-context" class="muted">Заполните баланс, даты и резерв.</p><div class="breakdown"><div><span>Баланс сейчас</span><strong id="result-balance">—</strong></div><div><span>Обязательные платежи</span><strong id="result-mandatory">—</strong></div><div><span>Повседневные расходы</span><strong id="result-daily">—</strong></div><div class="subtotal"><span>Остаток до покупки</span><strong id="result-before">—</strong></div><div><span>Резерв</span><strong id="result-reserve">—</strong></div></div><div class="purchase"><label>А если купить на…<span class="purchase-input"><input id="purchase" type="number" min="0" step="0.01" value="0" inputmode="decimal" required><span>₽</span></span></label><div class="purchase-presets"><button type="button" data-purchase="3000">3 000 ₽</button><button type="button" data-purchase="7000">7 000 ₽</button><button type="button" data-purchase="12000">12 000 ₽</button></div></div><div class="after-row"><span>Остаток после покупки</span><strong id="after-amount">—</strong></div><div id="decision" class="decision" role="status">Расчёт появится после заполнения данных.</div><div class="buffer"><div class="buffer-head"><span>Запас относительно резерва</span><strong id="margin">—</strong></div><div class="buffer-track"><span id="buffer-fill"></span><i></i></div></div></div></div>
- <div class="save-calculation"><label>Название расчёта<input id="save-name" type="text" maxlength="100" required placeholder="Например, покупка наушников" value="Мой расчёт"></label><button id="save-calculation" type="button" class="button" disabled>Войти и сохранить</button><p id="save-message" class="micro" role="status" aria-live="polite"></p></div>
+ <div class="save-calculation"><label>Название расчёта<input id="save-name" type="text" maxlength="100" required placeholder="Например, покупка наушников" value="Мой расчёт"></label><button id="save-calculation" type="button" class="button" disabled>Сохранить в профиле</button><p id="save-message" class="micro" role="status" aria-live="polite"></p></div>
  <details class="schedule"><summary>Какие платежи учтены до дохода <span id="schedule-count"></span></summary><div id="schedule-list"></div></details>
  <div class="forecast-note"><strong>Это оценка по истории, а не гарантия.</strong><p>Неожиданные расходы, неполная выписка и задержка дохода изменят результат. Поступление следующего дохода в остаток не прибавляется. Переводы на собственные счета и нерегулярные крупные покупки проверьте отдельно.</p></div>
  </section>
  </div>
 </section>
+</div>
 </main>
 <footer class="site-footer closing">
-  <div class="wrap"><span>Soul · учебный прототип</span><span>Выписки обрабатываются в браузере</span><a href="https://digital.sber.ru/ru/person/help/statements_inquiry_faq" target="_blank" rel="noopener noreferrer">Справка Сбера ↗</a></div>
+  <div class="wrap"><span>Soul · учебный прототип</span></div>
 </footer>
 </body>
 </html>

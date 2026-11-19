@@ -123,7 +123,24 @@ function calculate(){
 for(const id of ['balance','reserve','purchase','to'])$(id).addEventListener('input',calculate);
 $('from').addEventListener('change',()=>{invalidate();try{refreshRecurring();estimate();renderTransactions();alertMessage('');}catch(e){alertMessage(e.message);}});
 document.querySelectorAll('[data-purchase]').forEach(b=>b.addEventListener('click',()=>{$('purchase').value=b.dataset.purchase;calculate();}));
-$('reset').addEventListener('click',()=>{loadToken++;state={operations:[],recurring:[],manual:[],page:0,filename:'',demo:false,dailyManual:false,loaded:false,ordinaryKeys:[],confirmedKeys:[],noFutureKeys:[]};lastForecast=null;$('review').hidden=true;$('forecast').hidden=true;$('reset').hidden=true;$('confirmed').checked=false;$('balance').value='';$('reserve').value='';$('file').value='';$('transactions-body').textContent='';$('schedule-list').textContent='';$('recurring-list').textContent='';$('manual-list').textContent='';$('step1').className='step active';$('step2').className='step';$('step3').className='step';alertMessage('');window.scrollTo({top:0,behavior:'smooth'});});
+function resetForecast() {
+ loadToken++;
+ state={operations:[],recurring:[],manual:[],page:0,filename:'',demo:false,dailyManual:false,loaded:false,ordinaryKeys:[],confirmedKeys:[],noFutureKeys:[]};
+ $('review').hidden=true;
+ $('forecast').hidden=true;
+ $('reset').hidden=true;
+ $('confirmed').checked=false;
+ for (const id of ['balance','reserve','file','search','daily','history-start','history-end']) $(id).value='';
+ for (const id of ['transactions-body','recurring-list','manual-list','file-label','history-summary','daily-explanation','daily-categories','separate-list','separate-summary','separate-help']) $(id).textContent='';
+ $('upload-title').textContent='Выберите или перетащите выписку';
+ $('upload').classList.remove('busy','drag');
+ $('step1').className='step active';
+ $('step2').className='step';
+ $('step3').className='step';
+ clearResults('Заполните баланс, даты и резерв.');
+ alertMessage('');
+}
+$('reset').addEventListener('click',()=>{resetForecast();$('tools').scrollIntoView({behavior:'smooth'});});
 
 function captureCalculation(){
  if(!lastForecast)throw Error('Сначала заполните данные и получите расчёт.');
@@ -139,5 +156,11 @@ function restoreCalculation(value,{draft=false}={}){
  $('step1').className='step';$('step2').className='step';$('step3').className='step active';renderManual();alertMessage('');calculate();$('forecast').scrollIntoView({behavior:'smooth'});
 }
 $('from-display').addEventListener('change',()=>{if(state.saved){$('from').value=$('from-display').value;$('history-end').value=addDays($('from').value,-1);calculate();}});
-window.addEventListener('skebalance:signedout',()=>{if(state.loaded)$('reset').click();});
-initAccount({capture:captureCalculation,restore:restoreCalculation}).catch(()=>{ $('account-connection').textContent='Вход временно недоступен. Расчёт можно использовать без аккаунта.'; });
+window.addEventListener('skebalance:profile',({detail:{previousUserId}})=>{
+ if(!previousUserId)return;
+ resetForecast();
+ $('save-name').value=$('save-name').defaultValue;
+ $('from').value=today();
+ $('to').value=addDays(today(),18);
+});
+initAccount({capture:captureCalculation,restore:restoreCalculation}).catch(()=>{ $('account-connection').textContent='Вход временно недоступен. Учебный пример доступен на главной.'; });
