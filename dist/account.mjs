@@ -2,6 +2,32 @@ import {cleanSnapshot,resultForSnapshot} from './snapshot.mjs';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:2}).format(n/100);
+const yandexProvider = 'custom:yandex';
+const yandexPendingKey = 'skebalance-yandex-signin';
+
+function readYandexCallback() {
+ const url = new URL(location.href);
+ if (url.searchParams.get('auth') !== 'yandex') return null;
+
+ const fragment = new URLSearchParams(url.hash.slice(1));
+ const callback = {
+  code: url.searchParams.get('code'),
+  denied: [url.searchParams, fragment].some(params =>
+   params.get('error') === 'access_denied' || params.get('error_code') === 'access_denied'),
+ };
+ history.replaceState(history.state, '', url.pathname);
+ return callback;
+}
+
+async function createYandexChallenge() {
+ const random = crypto.getRandomValues(new Uint8Array(32));
+ const verifier = Array.from(random, byte => byte.toString(16).padStart(2, '0')).join('');
+ const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+ const challenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
+  .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+ return { verifier, challenge };
+}
+
 export function readableError(error){
  const code=error?.code||'',message=error?.message||'';
  if(code==='invalid_credentials'||/Invalid login credentials/i.test(message))return 'Не удалось войти. Проверьте email и пароль.';
@@ -18,8 +44,13 @@ export function readableError(error){
 }
 export async function initAccount({capture,restore}){
  let client=null,user=null,mode='login',revision=0,runs=[],valid=false;
+ const yandex = $('account-yandex');
+ const yandexButton = $('yandex-signin');
+ const config = window.SKEBALANCE_CONFIG || {};
+ const yandexCallback = readYandexCallback();
+ const yandexEnabled = config.yandexLoginEnabled === true;
  function message(text,error=false){$('account-message').textContent=text;$('account-message').className='account-message'+(error?' error':'');}
- function open(){ $('account-panel').hidden=false;$('account-toggle').setAttribute('aria-expanded','true');$('account-panel').scrollIntoView({behavior:'smooth',block:'start'});if(!user)$('account-email').focus({preventScroll:true});}
+ function open(){ $('account-panel').hidden=false;$('account-toggle').setAttribute('aria-expanded','true');$('account-panel').scrollIntoView({behavior:'smooth',block:'start'});if(!user)(yandex.hidden?$('account-email'):yandexButton).focus({preventScroll:true});}
  function setMode(next){mode=next;$('login-mode').setAttribute('aria-pressed',String(mode==='login'));$('signup-mode').setAttribute('aria-pressed',String(mode==='signup'));$('account-submit').textContent=mode==='signup'?'Создать аккаунт':'Войти';$('account-password').autocomplete=mode==='signup'?'new-password':'current-password';$('account-password').minLength=mode==='signup'?12:1;$('password-hint').hidden=mode!=='signup';message('');}
  function saveLabel(){ $('save-calculation').textContent=user?'Сохранить в аккаунте':'Войти и сохранить';$('save-calculation').disabled=!valid; }
  function renderRuns(){
@@ -32,7 +63,8 @@ export async function initAccount({capture,restore}){
  }
  function sessionChanged(event,session){
   const next=session?.user??null;const changed=next?.id!==user?.id;if(changed){revision++;runs=[];renderRuns();}user=next;
-  $('account-form').hidden=!!user;$('account-tabs').hidden=!!user;$('account-user').hidden=!user;$('saved-section').hidden=!user;$('account-toggle').textContent=user?'Мои расчёты':'Войти';$('account-user-email').textContent=user?.email||'';saveLabel();
+  $('account-form').hidden=!!user;$('account-tabs').hidden=!!user;$('account-user').hidden=!user;$('saved-section').hidden=!user;$('account-toggle').textContent=user?'Мои расчёты':'Войти';$('account-user-email').textContent=user?.email||(user?.app_metadata?.provider===yandexProvider?'Яндекс ID':'');saveLabel();
+  yandex.hidden = !!user || !yandexEnabled;
   if(event==='PASSWORD_RECOVERY'){open();$('password-update-form').hidden=false;message('Задайте новый пароль для аккаунта.');}
   else if(!user)$('password-update-form').hidden=true;
   if(event==='SIGNED_OUT'&&changed)window.dispatchEvent(new CustomEvent('skebalance:signedout'));
@@ -64,12 +96,85 @@ export async function initAccount({capture,restore}){
    try{const {error}=await client.from('saved_calculations').delete().eq('id',deleteId);if(error)throw error;if(epoch!==revision)return;runs=runs.filter(r=>r.id!==deleteId);renderRuns();message('Расчёт удалён.');}catch(err){if(epoch===revision)message(readableError(err),true);}finally{if(e.target.isConnected)e.target.disabled=false;}
   }
  });
- const config=window.SKEBALANCE_CONFIG||{};
  if(!config.supabaseUrl||!/^sb_publishable_/.test(config.supabasePublishableKey||'')||!window.supabase?.createClient){$('account-connection').textContent='Аккаунты ещё не подключены. Калькулятор работает без регистрации.';$('account-submit').disabled=true;$('forgot-password').disabled=true;return;}
  let origin;try{origin=new URL(config.supabaseUrl);if(origin.protocol!=='https:')throw Error('HTTPS required');}catch{$('account-connection').textContent='Вход временно недоступен. Калькулятор работает без регистрации.';return;}
  const fetchWithTimeout=(url,options={})=>fetch(url,{...options,signal:options.signal?AbortSignal.any([options.signal,AbortSignal.timeout(20000)]):AbortSignal.timeout(20000)});
  client=window.supabase.createClient(config.supabaseUrl,config.supabasePublishableKey,{auth:{persistSession:true,storage:sessionStorage,autoRefreshToken:true,detectSessionInUrl:true},global:{fetch:fetchWithTimeout}});
  $('account-connection').textContent='В аккаунте сохраняются только выбранные расчёты. PDF и история операций остаются в браузере.';
  client.auth.onAuthStateChange((event,session)=>sessionChanged(event,session));
- const {data,error}=await client.auth.getSession();if(error)message(readableError(error),true);else if(data.session)sessionChanged('INITIAL_SESSION',data.session);
+ yandexButton.addEventListener('click', async () => {
+  if (!yandexEnabled || user) return;
+  yandexButton.disabled = true;
+  message('Переходим к Яндексу…');
+  try {
+   // Use PKCE for Yandex while keeping existing email links compatible across tabs.
+   const { verifier, challenge } = await createYandexChallenge();
+   const redirectTo = new URL('./?auth=yandex', location.href).href;
+   const { data, error } = await client.auth.signInWithOAuth({
+    provider: yandexProvider,
+    options: {
+     redirectTo,
+     skipBrowserRedirect: true,
+     queryParams: { code_challenge: challenge, code_challenge_method: 's256' },
+    },
+   });
+   if (error || !data.url) throw error || new Error('Missing authorize URL');
+   if (user) {
+    yandexButton.disabled = false;
+    return;
+   }
+   let draft = null;
+   try { if (valid) draft = cleanSnapshot(capture()); } catch { /* The calculation may have been reset. */ }
+   sessionStorage.setItem(yandexPendingKey, JSON.stringify({
+    verifier, draft, name: draft ? $('save-name').value : '', started: Date.now(),
+   }));
+   location.assign(data.url);
+  } catch {
+   yandexButton.disabled = false;
+   message('Не удалось открыть вход через Яндекс. Попробуйте ещё раз.', true);
+  }
+ });
+ window.addEventListener('pageshow', event => {
+  if (!event.persisted || !yandexButton.disabled) return;
+  yandexButton.disabled = false;
+  sessionStorage.removeItem(yandexPendingKey);
+  message('');
+ });
+
+ const {data,error}=await client.auth.getSession();if(error)message(readableError(error),true);else sessionChanged('INITIAL_SESSION',data.session);
+ if (!yandexCallback || !yandexEnabled) return;
+
+ try {
+  const pending = sessionStorage.getItem(yandexPendingKey);
+  sessionStorage.removeItem(yandexPendingKey);
+  const attempt = JSON.parse(pending);
+  if (!/^[a-f0-9]{64}$/.test(attempt?.verifier ?? '') || !Number.isFinite(attempt.started) ||
+      Date.now() - attempt.started > 30 * 60 * 1000) throw new Error('Missing OAuth attempt');
+  if (attempt.draft) {
+   restore(attempt.draft, { draft: true });
+   $('save-name').value = attempt.name;
+  }
+  if (yandexCallback.denied) {
+   open();
+   message('Вход через Яндекс отменён.');
+   return;
+  }
+  if (!yandexCallback.code) throw new Error('Missing OAuth code');
+
+  const endpoint = new URL('/auth/v1/token?grant_type=pkce', origin);
+  const response = await fetchWithTimeout(endpoint, {
+   method: 'POST',
+   headers: { apikey: config.supabasePublishableKey, 'Content-Type': 'application/json' },
+   body: JSON.stringify({ auth_code: yandexCallback.code, code_verifier: attempt.verifier }),
+  });
+  if (!response.ok) throw new Error('OAuth code exchange failed');
+  const { access_token, refresh_token } = await response.json();
+  const signedIn = await client.auth.setSession({ access_token, refresh_token });
+  if (signedIn.error || !signedIn.data.session) throw new Error('Missing OAuth session');
+  open();
+  message('Вы вошли через Яндекс. Теперь можно сохранять расчёты.');
+ } catch {
+  open();
+  message('Не удалось завершить вход через Яндекс. Попробуйте ещё раз.', true);
+ }
 }

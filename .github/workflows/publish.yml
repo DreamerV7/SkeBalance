@@ -10,7 +10,10 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
-    if: github.event_name == 'workflow_dispatch' || vars.AUTO_DEPLOY_NETLIFY == 'true'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      vars.AUTO_DEPLOY_NETLIFY == 'true' ||
+      contains(github.event.head_commit.message, '[deploy-netlify]')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -25,6 +28,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          YANDEX_LOGIN_ENABLED: ${{ vars.YANDEX_LOGIN_ENABLED }}
         run: node scripts/build.mjs --require-account
       - name: Package site
         working-directory: dist

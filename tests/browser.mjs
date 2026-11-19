@@ -4,11 +4,12 @@ import fs from 'node:fs/promises';
 await fs.mkdir('qa',{recursive:true});
 await fs.copyFile('tests/fixtures/sber-synthetic.pdf','qa/synthetic-layout.pdf');
 const executablePath=process.env.BROWSER_EXECUTABLE||(process.platform==='win32'?'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe':undefined);
+const baseUrl=`http://127.0.0.1:${process.env.PORT||4173}/`;
 const browser=await chromium.launch({executablePath,headless:true,args:['--disable-gpu']});
 const page=await browser.newPage({viewport:{width:1440,height:1100}});const errors=[];const requests=[];
 page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push(r.url()));
 try{
- await page.goto('http://127.0.0.1:4173/');await page.locator('#demo').waitFor();await page.bringToFront();await page.evaluate(()=>new Promise(requestAnimationFrame));
+ await page.goto(baseUrl);await page.locator('#demo').waitFor();await page.bringToFront();await page.evaluate(()=>new Promise(requestAnimationFrame));
  await page.screenshot({path:'qa/start.png',fullPage:true});
  await page.locator('#demo').click();await page.locator('#review').waitFor({state:'visible'});
  assert.equal(await page.locator('.regular-row').count(),3);
@@ -62,7 +63,7 @@ try{
  await page.locator('#balance').fill('30000');await page.locator('#reserve').fill('5000');assert.notEqual(await page.locator('#safe-amount').textContent(),'—');
  await page.locator('.transactions').evaluate(el=>el.open=true);await page.locator('[data-role="op-3"]').selectOption('daily');assert.equal(await page.locator('#confirmed').isChecked(),false);assert.equal(await page.locator('#forecast').isVisible(),false);assert.equal(await page.locator('#daily').inputValue(),'164.52');
  await page.screenshot({path:'qa/categories-desktop.png',fullPage:true});await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);await page.screenshot({path:'qa/categories-mobile.png',fullPage:true});
- assert.equal(requests.some(u=>!u.startsWith('http://127.0.0.1:4173/')&&!u.startsWith('blob:')),false);
+ assert.equal(requests.some(u=>!u.startsWith(baseUrl)&&!u.startsWith('blob:')),false);
  assert.deepEqual(errors,[]);
  console.log('Browser checks passed: demo, confirmation, purchase, missing inputs, manual payment, CSV import/export, ignored rows, XSS, mobile overflow, no external requests.');
 }finally{await browser.close();}

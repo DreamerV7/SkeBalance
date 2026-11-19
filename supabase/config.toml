@@ -1,1 +1,4 @@
 project_id = "skebalance"
+
+[functions.yandex-userinfo]
+verify_jwt = false

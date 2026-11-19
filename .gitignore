@@ -8,6 +8,7 @@ tools/vendor-build/
 dist/config.js
 site.zip
 qa/
+.taste-skill/
 *.log
 *.pdf
 !tests/fixtures/*.pdf

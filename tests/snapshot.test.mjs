@@ -6,3 +6,9 @@ export const sample={version:1,from:'2026-11-12',to:'2026-11-30',balance:3500000
 test('snapshots preserve calculation and discard private history and unknown fields',()=>{const cleaned=cleanSnapshot({...sample,operations:[{description:'Личная операция'}],filename:'Иванов.pdf',secret:'do-not-save'});assert.deepEqual(cleaned,sample);assert.equal(resultForSnapshot(cleaned).after,110000);});
 test('snapshots reject missing, corrupt and unbounded values',()=>{assert.throws(()=>cleanSnapshot({...sample,daily:NaN}));assert.throws(()=>cleanSnapshot({...sample,recurring:[{label:'x',amount:100,day:0,active:true}]}));assert.throws(()=>cleanSnapshot({...sample,obligations:[{label:'',amount:100,date:'2026-11-15'}]}));assert.throws(()=>cleanSnapshot({...sample,version:2}));});
 test('build includes only public configuration and rejects secret keys',()=>{assert.equal(publicConfig({}).supabaseUrl,'');assert.throws(()=>publicConfig({SUPABASE_URL:'https://example.supabase.co'}));assert.throws(()=>publicConfig({SUPABASE_URL:'https://example.supabase.co',SUPABASE_PUBLISHABLE_KEY:'sb_secret_wrong'}));assert.throws(()=>publicConfig({SUPABASE_URL:'https://user:password@example.supabase.co',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test'}));assert.deepEqual(publicConfig({SUPABASE_URL:'https://example.supabase.co',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test',SUPABASE_DB_PASSWORD:'secret'}),{supabaseUrl:'https://example.supabase.co',supabasePublishableKey:'sb_publishable_test'});});
+test('Yandex login can be enabled only with public Supabase configuration', () => {
+  assert.throws(() => publicConfig({ YANDEX_LOGIN_ENABLED: 'true' }));
+  const env = { SUPABASE_URL: 'https://example.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test' };
+  const config = publicConfig({ ...env, YANDEX_LOGIN_ENABLED: 'true', YANDEX_CLIENT_SECRET: 'keep-on-server' });
+  assert.deepEqual(config, { ...publicConfig(env), yandexLoginEnabled: true });
+});

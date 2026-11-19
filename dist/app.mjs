@@ -129,13 +129,13 @@ function captureCalculation(){
  if(!lastForecast)throw Error('Сначала заполните данные и получите расчёт.');
  return cleanSnapshot({version:1,from:$('from').value,to:$('to').value,balance:cents($('balance').value),daily:cents($('daily').value),reserve:cents($('reserve').value),purchase:cents($('purchase').value),recurring:state.recurring,obligations:state.manual.map(r=>({...r,amount:cents(r.amount)}))});
 }
-function restoreCalculation(value){
+function restoreCalculation(value,{draft=false}={}){
  const snapshot=cleanSnapshot(value);loadToken++;
  state={operations:[],recurring:snapshot.recurring.map((r,i)=>({...r,id:'reg-'+i,operationIds:[],count:0,lastDate:snapshot.from})),ordinaryKeys:[],confirmedKeys:[],noFutureKeys:[],manual:snapshot.obligations.map(r=>({...r,id:crypto.randomUUID(),amount:(r.amount/100).toFixed(2)})),page:0,filename:'',demo:false,dailyManual:true,loaded:true,saved:true};
  for(const id of ['from','from-display'])$(id).value=snapshot.from;$('to').value=snapshot.to;$('history-start').value=snapshot.from;$('history-end').value=addDays(snapshot.from,-1);
  for(const id of ['balance','daily','reserve','purchase'])$(id).value=(snapshot[id]/100).toFixed(2);
  $('review').hidden=true;$('forecast').hidden=false;$('reset').hidden=false;$('confirmed').checked=true;$('from-display').readOnly=false;
- $('history-badge').textContent='Сохранённый расчёт';$('forecast-intro').textContent='Параметры восстановлены из аккаунта. Исходная выписка не сохранялась. Можно изменить дату, суммы и покупку.';
+ $('history-badge').textContent=draft?'Текущий расчёт':'Сохранённый расчёт';$('forecast-intro').textContent=draft?'Параметры восстановлены после входа. Можно изменить дату, суммы и покупку.':'Параметры восстановлены из аккаунта. Исходная выписка не сохранялась. Можно изменить дату, суммы и покупку.';
  $('step1').className='step';$('step2').className='step';$('step3').className='step active';renderManual();alertMessage('');calculate();$('forecast').scrollIntoView({behavior:'smooth'});
 }
 $('from-display').addEventListener('change',()=>{if(state.saved){$('from').value=$('from-display').value;$('history-end').value=addDays($('from').value,-1);calculate();}});
