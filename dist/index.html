@@ -14,12 +14,12 @@
   <title>Soul · Бюджет на неделю</title>
   <link rel="icon" type="image/png" href="./soul-king-icon.png?v=2">
   <link rel="stylesheet" href="./style.css">
-  <link rel="stylesheet" href="./soul.css?v=profile-3">
+  <link rel="stylesheet" href="./soul.css?v=statement-review">
   <script type="module" src="./soul.mjs?v=profile-3"></script>
   <script type="module" src="./king.mjs?v=2"></script>
   <script defer src="./config.js"></script>
   <script defer src="./vendor/supabase.js"></script>
-  <script type="module" src="./app.mjs"></script>
+  <script type="module" src="./app.mjs?v=statement-review"></script>
 </head>
 <body>
 <header class="topbar nav">
@@ -203,12 +203,30 @@
  <p class="micro"><a href="https://digital.sber.ru/ru/person/help/statements_inquiry_faq" target="_blank" rel="noopener noreferrer">Как заказать выписку в Сбере</a></p>
  </section>
  <section id="review" class="section" hidden>
- <div class="section-heading"><div><p class="file-label" id="file-label"></p><h3>Проверим, что получилось</h3><p>Подтвердите период истории и платежи, прежде чем считать остаток.</p></div><button id="export" class="secondary" type="button">Скачать операции CSV</button></div>
+ <div class="section-heading"><div><p class="file-label" id="file-label"></p><h3 id="review-heading" tabindex="-1">Проверка выписки</h3><p>Подтвердите период истории и платежи, прежде чем считать остаток.</p></div><button id="export" class="secondary" type="button">Скачать операции CSV</button></div>
  <div id="import-warnings" class="notice"></div>
+ <div class="review-grid">
+  <details id="daily-details" class="review-card daily-card">
+   <summary><span class="review-card-title">Повседневные расходы</span><strong id="daily-overview" class="review-card-value">—</strong><span id="daily-context" class="review-card-context"></span></summary>
+   <div class="review-card-body">
+    <label class="money-label">В среднем за день, ₽<input id="daily" type="number" min="0" step="0.01" inputmode="decimal" required></label>
+    <p id="daily-explanation" class="muted"></p>
+    <div id="daily-categories" aria-live="polite"></div>
+    <button id="auto-daily" class="text-button" type="button">Пересчитать по истории</button>
+   </div>
+  </details>
+  <details id="recurring-details" class="review-card">
+   <summary><span class="review-card-title">Регулярные платежи</span><strong id="recurring-overview" class="review-card-value">—</strong><span id="recurring-count" class="review-card-context"></span></summary>
+   <div class="review-card-body">
+    <p class="muted">Автопоиску нужны минимум три списания одному получателю. Интервал между ними должен быть 25–35 дней, с возможностью одного пропуска на 55–65 дней. Допустимое отличие каждой суммы от медианы — до 20%.</p>
+    <div id="recurring-list"></div>
+    <p class="micro" id="recurring-hint">Снимите галочку, если платёж больше не ожидается. Кнопка «Обычные траты» возвращает прошлые списания в повседневные расходы.</p>
+    <section class="separate-section"><h4>Отдельно от повседневных</h4><p id="separate-summary" class="micro"></p><p id="separate-help" class="muted"></p><div id="separate-list"></div></section>
+   </div>
+  </details>
+ </div>
  <div class="history-summary" id="history-summary"></div>
  <div class="fields history-fields"><label>Начало периода выписки<input id="history-start" type="date" required></label><label>Конец периода выписки<input id="history-end" type="date" required></label><label>Дата расчёта<input id="from" type="date" required></label><div class="history-hint"><p class="micro">Укажите полный период из документа, включая дни без операций. Для анализа используем только операции и полные дни до даты расчёта.</p></div></div>
- <div class="review-grid"><div><h4>Повторяющиеся платежи <span class="count" id="recurring-count">0</span></h4><p class="muted">Кандидаты по похожему описанию, сумме и месячному интервалу. Проверьте дату и сумму.</p><div id="recurring-list"></div><p class="micro">Снятая галочка означает, что платёж больше не ожидается. Его старые списания не попадут в повседневные расходы. Вернуть их туда можно кнопкой «Обычные траты».</p></div><div class="daily-card"><h4>Повседневные расходы</h4><label class="money-label">В среднем за день, ₽<input id="daily" type="number" min="0" step="0.01" inputmode="decimal" required></label><p id="daily-explanation" class="muted"></p><div id="daily-categories" aria-live="polite"></div><button id="auto-daily" class="text-button" type="button">Пересчитать по истории</button><p class="micro">Средняя сумма — бюджет на календарный день, а не обещание ежедневной покупки. ЖКХ, интернет, разовые покупки и переводы проверьте в отдельной группе. Переводы между своими счетами исключите из истории.</p></div></div>
- <section class="separate-section"><h4>Отдельно от повседневных</h4><p id="separate-summary" class="micro"></p><p id="separate-help" class="muted"></p><div id="separate-list"></div></section>
  <details class="transactions"><summary>Посмотреть операции <span id="operation-count"></span></summary><p class="micro">Положительные суммы — поступления: стипендия, зарплата, возвраты и входящие переводы. Они уже отражены в текущем балансе и не прибавляются к прогнозу повторно. Исходное описание операции из выписки сохраняется.</p><div class="table-toolbar"><label class="search-label">Поиск<input id="search" type="search" placeholder="Описание или категория"></label><span class="micro">Исправьте категорию или отметьте ежемесячный платёж. «Не учитывать» исключает операцию из анализа.</span></div><div class="table-scroll"><table><thead><tr><th>Дата</th><th>Операция</th><th>Категория</th><th class="numeric">Сумма</th><th>Не учитывать</th></tr></thead><tbody id="transactions-body"></tbody></table></div><div class="pager"><button id="prev" class="text-button" type="button">← Назад</button><span id="page-label"></span><button id="next" class="text-button" type="button">Далее →</button></div></details>
  <div class="confirm-row"><label class="checkbox"><input id="confirmed" type="checkbox">Я проверил период, операции и повторяющиеся платежи</label><button id="continue" class="button" type="button">К расчёту покупки <span aria-hidden="true">→</span></button></div>
  </section>

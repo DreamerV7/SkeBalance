@@ -1,40 +1,101 @@
-import {initAccount} from './account.mjs';
+import {initAccount} from './account.mjs?v=statement-review';
 import {cleanSnapshot} from './snapshot.mjs';
-import {cents,dateISO,addDays,dayNumber,parseCSV,parseSberLines,detectRecurring,dailyEstimate,forecast,toCSV,classifyExpense,expenseCategories,merchant,classifyIncome,spendingRoles} from './core.mjs';
+import {cents,dateISO,addDays,dayNumber,parseCSV,parseSberLines,detectRecurring,dailyEstimate,forecast,toCSV,classifyExpense,expenseCategories,merchant,classifyIncome,spendingRoles} from './core.mjs?v=statement-review';
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:2}).format(n/100);
 const dt=s=>new Intl.DateTimeFormat('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'UTC'}).format(new Date(s+'T00:00:00Z'));
 const today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');};
 let state={operations:[],recurring:[],manual:[],page:0,filename:'',demo:false,dailyManual:false,loaded:false,ordinaryKeys:[],confirmedKeys:[],noFutureKeys:[]};
-let lastForecast=null,loadToken=0;
+let lastForecast=null,loadToken=0,forecastReady=false,uploadError=false;
+const reviewDetails=[$('daily-details'),$('recurring-details'),$('review').querySelector('.transactions')];
+const stages=['upload','review','forecast'];
 $('from').value=today();$('to').value=addDays(today(),18);
-function alertMessage(message){$('alert').textContent=message||'';$('alert').hidden=!message;}
-function invalidate(){ $('confirmed').checked=false;$('forecast').hidden=true;$('step3').className='step';lastForecast=null;window.dispatchEvent(new CustomEvent('skebalance:calculation',{detail:{valid:false}})); }
+function alertMessage(message,fromUpload=false){uploadError=fromUpload;$('alert').textContent=message||'';$('alert').hidden=!message;}
+function showToolsStage(hash=location.hash){
+ const hasStatement=state.loaded&&!state.saved;
+ const stage=hash==='#upload'?'upload':
+  forecastReady&&(hash==='#forecast'||state.saved)?'forecast':hasStatement?'review':'upload';
+ if(stage!=='upload'&&uploadError)alertMessage('');
+ $('upload').hidden=stage!=='upload';
+ $('review').hidden=stage==='upload'||!hasStatement;
+ $('forecast').hidden=stage==='upload'||!forecastReady;
+ const stageIndex=stages.indexOf(stage);
+ for(const [index,name] of stages.entries()){
+  const step=$('step'+(index+1));
+  const active=name===stage;
+  const available=name==='upload'||(name==='review'?hasStatement:forecastReady);
+  step.classList.toggle('active',active);
+  step.classList.toggle('done',available&&index<stageIndex);
+  if(active)step.setAttribute('aria-current','step');else step.removeAttribute('aria-current');
+  if(available)step.removeAttribute('aria-disabled');else step.setAttribute('aria-disabled','true');
+ }
+ return stage;
+}
+function openToolsStage(hash){
+ showToolsStage(hash);
+ if(location.hash!==hash)location.hash=hash;
+ else $(hash.slice(1)).scrollIntoView({block:'start'});
+}
+for(const id of ['step2','step3'])$(id).addEventListener('click',event=>{
+ if(event.currentTarget.getAttribute('aria-disabled')==='true')event.preventDefault();
+});
+showToolsStage();
+function invalidate(){ $('confirmed').checked=false;forecastReady=false;showToolsStage();lastForecast=null;window.dispatchEvent(new CustomEvent('skebalance:calculation',{detail:{valid:false}})); }
 function summary(){const t=state.operations,spend=t.filter(x=>x.amount<0).reduce((s,x)=>s-x.amount,0),income=t.filter(x=>x.amount>0).reduce((s,x)=>s+x.amount,0);$('history-summary').innerHTML=[['Операций',t.length],['Списания',fmt(spend)],['Поступления',fmt(income)]].map(([a,b])=>`<div><span>${esc(a)}</span><strong>${esc(b)}</strong></div>`).join('');$('operation-count').textContent=`(${t.length})`;}
-function regularList(){ $('recurring-count').textContent=state.recurring.length;$('recurring-list').innerHTML=state.recurring.length?state.recurring.map(r=>`<div class="regular-row" data-id="${r.id}"><label class="regular-top"><input type="checkbox" data-field="active" ${r.active?'checked':''}><span class="regular-name">${esc(r.label)}</span></label><div class="regular-fields"><label>Ожидаемая сумма, ₽<input data-field="amount" type="number" min="0" step="0.01" value="${r.amount/100}" required></label><label>Число месяца<input data-field="day" type="number" min="1" max="31" step="1" value="${r.day}" required></label></div><p class="micro">${r.confirmed?'Отмечен вами как ежемесячный · ':''}${r.count} списания · последнее ${dt(r.lastDate)} · история исключена из обычных трат</p><button class="text-button" type="button" data-action="daily">Обычные траты — убрать из регулярных</button></div>`).join(''):'<p class="empty">Уверенных повторений не найдено. Добавьте известные обязательные платежи в расчёте ниже.</p>'; }
+function regularList(){ $('recurring-list').innerHTML=state.recurring.length?state.recurring.map(r=>`<div class="regular-row" data-id="${r.id}"><label class="regular-top"><input type="checkbox" data-field="active" ${r.active?'checked':''}><span class="regular-name">${esc(r.label)}</span></label><div class="regular-fields"><label>Ожидаемая сумма, ₽<input data-field="amount" type="number" min="0" step="0.01" value="${r.amount/100}" required></label><label>Число месяца<input data-field="day" type="number" min="1" max="31" step="1" value="${r.day}" required></label></div><p class="micro">${r.confirmed?'Отмечен вами как ежемесячный · ':''}${r.count} списания · последнее ${dt(r.lastDate)}</p><button class="text-button" type="button" data-action="daily">Обычные траты — убрать из регулярных</button></div>`).join(''):'<p class="empty">Автопоиск не нашёл регулярных платежей. Известное списание можно отметить вручную в списке операций.</p>'; }
+function reviewOverview(est){
+ let daily='—';
+ try{if(est)daily=fmt(cents($('daily').value))+' / день';}catch{}
+ $('daily-overview').textContent=daily;
+ $('daily-context').textContent=est?(state.dailyManual?'Ваша оценка':`${fmt(est.total)} за ${est.days} дн.`):'Проверьте период выписки';
+ const active=state.recurring.filter(r=>r.active);
+ const total=active.reduce((sum,r)=>sum+r.amount,0);
+ $('recurring-overview').textContent=est&&active.every(r=>Number.isSafeInteger(r.amount)&&r.amount>=0)&&Number.isSafeInteger(total)?fmt(total)+' / мес.':'—';
+ const found=state.recurring.length?'В прогнозе: '+active.length:'Автопоиск ничего не нашёл';
+ $('recurring-hint').hidden=!state.recurring.length;
+ const pending=est?pendingSeparate().length:0;
+ $('recurring-count').textContent=est?found+(pending?` · Уточнить: ${pending}`:''):'Проверьте период выписки';
+}
 function estimate(){
  if(state.saved)return {daily:cents($('daily').value),days:0,total:0,categories:[]};
  try{const start=dateISO($('history-start').value),end=dateISO($('history-end').value),from=dateISO($('from').value),cutoff=end>=from?addDays(from,-1):end;
   const est=dailyEstimate(state.operations,state.recurring,start,cutoff);if(!state.dailyManual)$('daily').value=(est.daily/100).toFixed(2);
   $('daily-explanation').textContent=`${fmt(est.total)} за ${est.days} календарных дней только повседневных трат. Отдельные платежи, разовые покупки и переводы сюда не входят. `+(state.dailyManual?'Используется ваша оценка.':'Используется среднее за полные дни, включая дни без трат.');if(est.days<60)$('daily-explanation').textContent+=' Короткая история: регулярные платежи могут не определиться.';if(end>=from)$('daily-explanation').textContent+=' Операции начиная с даты расчёта исключены из анализа.';$('daily-explanation').classList.toggle('manual-label',state.dailyManual);
-  state.analysis=est;renderDailyCategories(est);renderSeparated(est);return est;
- }catch(e){$('daily-categories').textContent='';$('daily-explanation').textContent=e.message;if(!state.dailyManual)$('daily').value='';throw e;}
+  state.analysis=est;reviewOverview(est);renderDailyCategories(est);renderSeparated(est);return est;
+ }catch(e){state.analysis=null;for(const id of ['daily-categories','separate-list','separate-summary','separate-help'])$(id).textContent='';$('daily-explanation').textContent=e.message;if(!state.dailyManual)$('daily').value='';reviewOverview();throw e;}
 }
 function renderDailyCategories(est){
  $('daily-categories').innerHTML=est.categories.length?`<p class="micro">По категориям за выбранный период${state.dailyManual?' · ваша оценка введена отдельно':''}</p><ul class="daily-category-list">${est.categories.map(r=>`<li><span>${esc(r.category)}<small>${esc(fmt(r.total))} за период · ${r.count} оп. · около ${r.weekly} в неделю</small><small>Средний чек ${esc(fmt(r.average))}</small></span><strong>${esc(fmt(r.daily))}<small>в день</small></strong></li>`).join('')}</ul><p class="micro">Категории определены по описанию и данным банка: их можно исправить в операциях. Среднее считается по всем календарным дням; округление по категориям может отличаться от общего итога.</p>`:'<p class="micro">За этот период нет повседневных расходов: проверьте даты и исключённые операции.</p>';
 }
 function pendingSeparate(){return (state.analysis?.separated||[]).filter(r=>r.role==='scheduled'&&!state.noFutureKeys.includes(r.merchantKey));}
+function recurringReason(t){
+ if(t.ignored)return 'Операция исключена вами.';
+ if(t.date>=$('from').value)return 'Операция совершена в дату расчёта или позже.';
+ if(t.date<$('history-start').value||t.date>$('history-end').value)return 'Операция вне выбранного периода.';
+ if(state.ordinaryKeys.includes(merchant(t)))return 'Тип расхода изменён вручную.';
+ const diagnostic=state.recurringDiagnostics?.get(t.id);
+ switch(diagnostic?.reason){
+  case 'recipient':return 'В описании нет различимого получателя.';
+  case 'transfer':return 'Переводы нужно подтверждать вручную.';
+  case 'category':return 'Категория или выбранный тип расхода исключены из автопоиска.';
+  case 'count':return `Найдено списаний одному получателю: ${diagnostic.count}. Для автопоиска нужно минимум 3.`;
+  case 'interval':return `Интервалы между списаниями: ${diagnostic.gaps.slice(0,6).join(', ')}${diagnostic.gaps.length>6?' …':''} дн. Месячный график не подтвердился.`;
+  case 'amount':return 'Суммы списаний отличаются от медианы больше чем на 20%.';
+  default:return '';
+ }
+}
 function renderSeparated(est){
  const pending=pendingSeparate();
  $('separate-summary').textContent=`В истории: повседневные ${fmt(est.total)} · регулярные ${fmt(est.regularTotal)} · отдельно ${fmt(est.otherTotal)}. Эти суммы не складываются повторно в прогнозе.`;
- $('separate-list').innerHTML=est.separated.length?est.separated.map(r=>`<div class="separate-row"><strong>${esc(r.label)}</strong><p class="micro">${esc(spendingRoles[r.role])} · ${r.count} оп. · ${esc(fmt(r.total))} за период · исключено из средней суммы в день</p>${r.role==='scheduled'?`<div class="separate-actions"><button class="text-button" type="button" data-regular="${r.operationIds.at(-1)}">Задать ежемесячный платёж</button><button class="text-button" type="button" data-no-future="${r.operationIds.at(-1)}">${state.noFutureKeys.includes(r.merchantKey)?'Отмечено: нового платежа не ожидается':'Нового платежа не ожидается'}</button></div>`:''}</div>`).join(''):'<p class="micro">Отдельных операций в выбранном периоде нет.</p>';
+ $('separate-list').innerHTML=est.separated.length?est.separated.map(r=>`<div class="separate-row"><strong>${esc(r.label)}</strong><p class="micro">${esc(spendingRoles[r.role])} · ${r.count} оп. · ${esc(fmt(r.total))} за период · исключено из средней суммы в день</p>${r.role==='scheduled'?`<p class="micro">${esc(recurringReason(state.operations.find(t=>t.id===r.operationIds.at(-1))))}</p><div class="separate-actions"><button class="text-button" type="button" data-regular="${r.operationIds.at(-1)}">Задать ежемесячный платёж</button><button class="text-button" type="button" data-no-future="${r.operationIds.at(-1)}">${state.noFutureKeys.includes(r.merchantKey)?'Отмечено: нового платежа не ожидается':'Нового платежа не ожидается'}</button></div>`:''}</div>`).join(''):'<p class="micro">Отдельных операций в выбранном периоде нет.</p>';
  $('separate-help').textContent=pending.length?`Нужно уточнить будущие платежи: ${pending.length}. Оплата в прошлом не определяет, когда платить снова. Разовый счёт можно отметить как разовую покупку и добавить будущую оплату вручную в расчёте.`:'Разовые покупки и переводы из прошлого автоматически не повторяются. Известные будущие траты добавьте в расчёте.';
 }
 function refreshRecurring(){
  const previous=new Map(state.recurring.map(r=>[r.key,r]));
  const from=dateISO($('from').value),start=dateISO($('history-start').value),end=dateISO($('history-end').value);
- state.recurring=detectRecurring(state.operations.filter(t=>t.date<from&&t.date>=start&&t.date<=end),state.confirmedKeys).filter(r=>!state.ordinaryKeys.includes(r.key)).map(r=>{const p=previous.get(r.key);return p?{...r,amount:p.amount,day:p.day,active:p.active}:r;});regularList();
+ state.recurringDiagnostics=new Map();
+ state.recurring=detectRecurring(state.operations.filter(t=>t.date<from&&t.date>=start&&t.date<=end),state.confirmedKeys,state.recurringDiagnostics).filter(r=>!state.ordinaryKeys.includes(r.key)).map(r=>{const p=previous.get(r.key);return p?{...r,amount:p.amount,day:p.day,active:p.active}:r;});regularList();
 }
 function renderTransactions(){
  const q=$('search').value.toLowerCase(),filtered=state.operations.filter(t=>(t.description+' '+t.category+' '+(t.amount<0?classifyExpense(t).category:classifyIncome(t))).toLowerCase().includes(q)).slice().reverse(),max=Math.max(1,Math.ceil(filtered.length/50));state.page=Math.min(state.page,max-1);const items=filtered.slice(state.page*50,(state.page+1)*50);
@@ -42,7 +103,8 @@ function renderTransactions(){
  $('transactions-body').innerHTML=items.map(t=>{
   const c=classifyExpense(t),regular=regIds.has(t.id),analysis=state.analysis?.recognition?.get(t.id);
   const options=[...new Set([c.category,...expenseCategories])].map(category=>`<option value="${esc(category)}" ${category===c.category?'selected':''}>${esc(category)}</option>`).join('');
-  return `<tr class="${t.ignored?'excluded':''}"><td>${dt(t.date)}</td><td>${esc(t.description)}${t.amount<0&&c.merchant?`<span class="source-category">Получатель: ${esc(c.merchant)}</span>`:''}${t.amount<0&&c.reviewTransfer?'<span class="transfer-flag">Перевод показан отдельно. Если это покупка, исправьте категорию и тип расхода.</span>':''}${regular?'<span class="transfer-flag">Учтён в регулярных</span>':''}${t.amount<0&&!regular?`<button class="text-button operation-regular" type="button" data-regular="${t.id}" ${t.ignored?'disabled':''}>Сделать ежемесячным</button>`:''}</td><td>${t.amount<0?`<select data-category="${t.id}" aria-label="Категория: ${esc(t.description)}">${options}</select><label class="source-category">Тип расхода<select data-role="${t.id}" aria-label="Тип расхода: ${esc(t.description)}">${Object.entries(spendingRoles).map(([value,label])=>`<option value="${value}" ${value===(regular?'scheduled':analysis?.role)?'selected':''}>${label}</option>`).join('')}</select></label>${analysis?`<span class="source-category">${esc(analysis.reason)} · уверенность: ${esc(analysis.confidence)}</span>`:''}<span class="source-category">${esc(c.source)} · в выписке: ${esc(t.category)}</span>${!merchant(t).startsWith('unknown:')?`<button class="text-button" type="button" data-apply-category="${t.id}">Применить к этому получателю</button>`:''}`:`<span class="income">${esc(classifyIncome(t))}</span><span class="source-category">В выписке: ${esc(t.category)}</span>`}</td><td class="numeric ${t.amount>0?'income':''}">${esc(fmt(t.amount))}</td><td><input type="checkbox" data-op="${t.id}" aria-label="Не учитывать: ${esc(t.description)}" ${t.ignored?'checked':''}></td></tr>`;
+  const recurrence=t.amount<0&&!regular?recurringReason(t):'';
+  return `<tr class="${t.ignored?'excluded':''}"><td>${dt(t.date)}</td><td>${esc(t.description)}${t.amount<0&&c.merchant?`<span class="source-category">Получатель: ${esc(c.merchant)}</span>`:''}${t.amount<0&&c.reviewTransfer?'<span class="transfer-flag">Перевод показан отдельно. Если это покупка, исправьте категорию и тип расхода.</span>':''}${regular?'<span class="transfer-flag">Учтён в регулярных</span>':''}${recurrence?`<span class="source-category">Регулярность: ${esc(recurrence)}</span>`:''}${t.amount<0&&!regular?`<button class="text-button operation-regular" type="button" data-regular="${t.id}" ${t.ignored?'disabled':''}>Сделать ежемесячным</button>`:''}</td><td>${t.amount<0?`<select data-category="${t.id}" aria-label="Категория: ${esc(t.description)}">${options}</select><label class="source-category">Тип расхода<select data-role="${t.id}" aria-label="Тип расхода: ${esc(t.description)}">${Object.entries(spendingRoles).map(([value,label])=>`<option value="${value}" ${value===(regular?'scheduled':analysis?.role)?'selected':''}>${label}</option>`).join('')}</select></label>${analysis?`<span class="source-category">${esc(analysis.reason)} · уверенность: ${esc(analysis.confidence)}</span>`:''}<span class="source-category">${esc(c.source)} · в выписке: ${esc(t.category)}</span>${!merchant(t).startsWith('unknown:')?`<button class="text-button" type="button" data-apply-category="${t.id}">Применить к этому получателю</button>`:''}`:`<span class="income">${esc(classifyIncome(t))}</span><span class="source-category">В выписке: ${esc(t.category)}</span>`}</td><td class="numeric ${t.amount>0?'income':''}">${esc(fmt(t.amount))}</td><td><input type="checkbox" data-op="${t.id}" aria-label="Не учитывать: ${esc(t.description)}" ${t.ignored?'checked':''}></td></tr>`;
  }).join('')||'<tr><td colspan="5">Нет подходящих операций.</td></tr>';
  $('page-label').textContent=`${state.page+1} / ${max}`;$('prev').disabled=state.page===0;$('next').disabled=state.page===max-1;
 }
@@ -51,8 +113,15 @@ function loadData(parsed,filename,isDemo=false){
  $('from-display').readOnly=true;$('forecast-intro').textContent='Уточните баланс и дату дохода. Оценка расходов уже взята из истории.';
  state={operations:parsed.operations,recurring:[],ordinaryKeys:[],confirmedKeys:[],noFutureKeys:[],manual:[],page:0,filename,demo:isDemo,dailyManual:false,loaded:true};
  $('history-start').value=parsed.periodStart||parsed.operations[0].date;$('history-end').value=parsed.periodEnd||parsed.operations.at(-1).date;$('daily').value='';$('balance').value=isDemo?'35000':'';$('reserve').value=isDemo?'5000':'';$('purchase').value=isDemo?'12000':'0';$('search').value='';
- $('review').hidden=false;$('reset').hidden=false;$('file-label').textContent=(isDemo?'Учебный пример · ':'')+filename;$('import-warnings').textContent=parsed.warnings.join('\n')+(isDemo?'\nВсе операции и цифры вымышлены. Это демонстрация, а не проверка точности на реальных данных.':'');
- $('step1').className='step done';$('step2').className='step active';invalidate();summary();refreshRecurring();renderManual();try{estimate();renderTransactions();}catch(e){alertMessage(e.message);} $('review').scrollIntoView({behavior:'smooth',block:'start'});
+ for(const details of reviewDetails)details.open=false;
+ $('reset').hidden=false;$('file-label').textContent=(isDemo?'Учебный пример · ':'')+filename;$('import-warnings').textContent=parsed.warnings.join('\n')+(isDemo?'\nВсе операции и цифры вымышлены. Это демонстрация, а не проверка точности на реальных данных.':'');
+ $('import-warnings').hidden=!$('import-warnings').textContent;
+ invalidate();summary();renderManual();
+ try{refreshRecurring();estimate();renderTransactions();}catch(e){alertMessage(e.message);}
+ if(location.hash==='#tools'||stages.includes(location.hash.slice(1))){
+  openToolsStage('#review');
+  $('review-heading').focus({preventScroll:true});
+ }
 }
 async function readPDF(file){
  const pdfjs=await import('./vendor/pdf.mjs');pdfjs.GlobalWorkerOptions.workerSrc=new URL('./vendor/pdf.worker.mjs',import.meta.url).href;
@@ -62,16 +131,17 @@ async function readPDF(file){
   return parseSberLines(lines);
  }catch(e){if(e.name==='PasswordException')throw Error('PDF защищён паролем. Скачайте выписку без пароля или используйте CSV.');if(e.name==='InvalidPDFException')throw Error('Файл повреждён или не является PDF.');throw e;}finally{await task.destroy();}
 }
-async function upload(file){if(!file)return;const token=++loadToken;if(state.loaded)invalidate();alertMessage('');if(file.size>15*1024*1024){alertMessage('Максимальный размер файла — 15 МБ.');return;}
+async function upload(file){if(!file)return;const token=++loadToken;alertMessage('');
  $('upload-title').textContent='Читаем выписку…';$('upload').classList.add('busy');
- try{let parsed;if(/\.pdf$/i.test(file.name))parsed=await readPDF(file);else if(/\.csv$/i.test(file.name)){const buffer=await file.arrayBuffer();let text=new TextDecoder('utf-8').decode(buffer);if(text.includes('\uFFFD'))text=new TextDecoder('windows-1251').decode(buffer);parsed=parseCSV(text);}else throw Error('Выберите PDF или CSV. Файлы XLSX пока не поддерживаются.');if(token===loadToken)loadData(parsed,file.name);}
- catch(e){if(token===loadToken){alertMessage(e.message+'\nТочный импорт вашей выписки нужно проверить на её шаблоне. Можно попробовать CSV-шаблон или учебный пример.');$('alert').scrollIntoView({behavior:'smooth'});}}
+ try{if(file.size>15*1024*1024)throw Error('Максимальный размер файла — 15 МБ.');let parsed;if(/\.pdf$/i.test(file.name))parsed=await readPDF(file);else if(/\.csv$/i.test(file.name)){const buffer=await file.arrayBuffer();let text=new TextDecoder('utf-8').decode(buffer);if(text.includes('\uFFFD'))text=new TextDecoder('windows-1251').decode(buffer);parsed=parseCSV(text);}else throw Error('Выберите PDF или CSV. Файлы XLSX пока не поддерживаются.');if(token===loadToken)loadData(parsed,file.name);}
+ catch(e){if(token===loadToken&&!$('upload').hidden){alertMessage(e.message+'\nМожно попробовать CSV-шаблон или учебный пример.',true);$('alert').scrollIntoView({behavior:'smooth'});}}
  finally{if(token===loadToken){$('upload-title').textContent='Выберите или перетащите выписку';$('upload').classList.remove('busy');$('file').value='';}}
 }
 $('file').addEventListener('change',e=>upload(e.target.files[0]));
 for(const ev of ['dragover','dragenter'])$('dropzone').addEventListener(ev,e=>{e.preventDefault();$('dropzone').classList.add('drag');});
 for(const ev of ['dragleave','drop'])$('dropzone').addEventListener(ev,e=>{e.preventDefault();$('dropzone').classList.remove('drag');if(ev==='drop')upload(e.dataTransfer.files[0]);});
 function demo(){
+ loadToken++;$('upload').classList.remove('busy');$('upload-title').textContent='Выберите или перетащите выписку';$('file').value='';
  alertMessage('');const from=today(),end=addDays(from,-1),d=new Date(from+'T00:00:00Z'),start=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()-3,1)).toISOString().slice(0,10),operations=[];
  const push=(date,amount,category,description)=>operations.push({id:'op-'+operations.length,date,amount,category,description,balance:null,ignored:false});
  for(let date=start;date<=end;date=addDays(date,1)){const day=+date.slice(8);push(date,-42000,'Продукты','Магазин у дома');if(day%3===0)push(date,-18000,'Транспорт','Городской транспорт');if(day===5)push(date,-800000,'Жильё','Аренда квартиры');if(day===10)push(date,-65000,'Связь','Мобильная связь');if(day===20)push(date,-39900,'Подписки','Музыкальная подписка');if(day===1)push(date,5000000,'Доход','Зарплата');}
@@ -97,7 +167,33 @@ for(const id of ['history-start','history-end'])$(id).addEventListener('change',
 $('daily').addEventListener('input',()=>{state.dailyManual=true;try{estimate();}catch{}if(!$('forecast').hidden)calculate();});
 $('auto-daily').addEventListener('click',()=>{state.dailyManual=false;try{estimate();alertMessage('');if(!$('forecast').hidden)calculate();}catch(e){alertMessage(e.message);}});
 $('search').addEventListener('input',()=>{state.page=0;renderTransactions();});$('prev').addEventListener('click',()=>{state.page--;renderTransactions();});$('next').addEventListener('click',()=>{state.page++;renderTransactions();});
-$('continue').addEventListener('click',()=>{alertMessage('');try{if(!$('confirmed').checked)throw Error('Подтвердите проверку периода, операций и платежей.');const start=dateISO($('history-start').value),end=dateISO($('history-end').value);if(state.operations.some(t=>t.date<start||t.date>end))throw Error('В период выписки должны входить все загруженные операции.');estimate();if(pendingSeparate().length)throw Error('Проверьте отдельные платежи: укажите ежемесячный график или отметьте, что нового платежа не ожидается.');cents($('daily').value);for(const r of state.recurring){if(r.active&&(!Number.isSafeInteger(r.amount)||r.amount<0||!Number.isInteger(r.day)||r.day<1||r.day>31))throw Error('Проверьте сумму и число регулярного платежа.');}$('from-display').value=$('from').value;$('forecast').hidden=false;$('step2').className='step done';$('step3').className='step active';$('history-badge').textContent=state.demo?'Учебные данные':'По вашей истории';calculate();$('forecast').scrollIntoView({behavior:'smooth'});}catch(e){alertMessage(e.message);}});
+$('continue').addEventListener('click',()=>{
+ alertMessage('');
+ try{
+  if(!$('confirmed').checked)throw Error('Подтвердите проверку периода, операций и платежей.');
+  const start=dateISO($('history-start').value),end=dateISO($('history-end').value);
+  if(state.operations.some(t=>t.date<start||t.date>end))throw Error('В период выписки должны входить все загруженные операции.');
+  estimate();
+  if(pendingSeparate().length){
+   $('recurring-details').open=true;
+   const id=pendingSeparate()[0].operationIds.at(-1);
+   $('separate-list').querySelector(`[data-regular="${id}"]`)?.focus();
+   throw Error('Проверьте отдельные платежи: укажите ежемесячный график или отметьте, что нового платежа не ожидается.');
+  }
+  cents($('daily').value);
+  for(const r of state.recurring){
+   if(r.active&&(!Number.isSafeInteger(r.amount)||r.amount<0||!Number.isInteger(r.day)||r.day<1||r.day>31)){
+    $('recurring-details').open=true;
+    throw Error('Проверьте сумму и число регулярного платежа.');
+   }
+  }
+  $('from-display').value=$('from').value;
+  $('history-badge').textContent=state.demo?'Учебные данные':'По вашей истории';
+  forecastReady=true;
+  openToolsStage('#forecast');
+  calculate();
+ }catch(e){alertMessage(e.message);}
+});
 $('confirmed').addEventListener('change',()=>{if(!$('confirmed').checked)invalidate();});
 function renderManual(){$('manual-list').innerHTML=state.manual.map(r=>`<div class="manual-row" data-id="${r.id}"><label>Название<input data-field="label" type="text" value="${esc(r.label)}" maxlength="100" placeholder="Например, ремонт" required></label><div class="fields"><label>Дата<input data-field="date" type="date" value="${esc(r.date)}" required></label><label>Сумма, ₽<input data-field="amount" type="number" min="0" step="0.01" value="${esc(r.amount)}" required></label></div><button data-remove="${r.id}" type="button" class="text-button remove">Убрать</button></div>`).join('');}
 $('add-obligation').addEventListener('click',()=>{state.manual.push({id:crypto.randomUUID(),label:'',date:$('from').value,amount:''});renderManual();calculate();$('manual-list').lastElementChild?.querySelector('input').focus();});
@@ -126,21 +222,18 @@ document.querySelectorAll('[data-purchase]').forEach(b=>b.addEventListener('clic
 function resetForecast() {
  loadToken++;
  state={operations:[],recurring:[],manual:[],page:0,filename:'',demo:false,dailyManual:false,loaded:false,ordinaryKeys:[],confirmedKeys:[],noFutureKeys:[]};
- $('review').hidden=true;
- $('forecast').hidden=true;
+ forecastReady=false;
+ showToolsStage();
  $('reset').hidden=true;
  $('confirmed').checked=false;
  for (const id of ['balance','reserve','file','search','daily','history-start','history-end']) $(id).value='';
  for (const id of ['transactions-body','recurring-list','manual-list','file-label','history-summary','daily-explanation','daily-categories','separate-list','separate-summary','separate-help']) $(id).textContent='';
  $('upload-title').textContent='Выберите или перетащите выписку';
  $('upload').classList.remove('busy','drag');
- $('step1').className='step active';
- $('step2').className='step';
- $('step3').className='step';
  clearResults('Заполните баланс, даты и резерв.');
  alertMessage('');
 }
-$('reset').addEventListener('click',()=>{resetForecast();$('tools').scrollIntoView({behavior:'smooth'});});
+$('reset').addEventListener('click',()=>{resetForecast();openToolsStage('#upload');});
 
 function captureCalculation(){
  if(!lastForecast)throw Error('Сначала заполните данные и получите расчёт.');
@@ -151,9 +244,9 @@ function restoreCalculation(value,{draft=false}={}){
  state={operations:[],recurring:snapshot.recurring.map((r,i)=>({...r,id:'reg-'+i,operationIds:[],count:0,lastDate:snapshot.from})),ordinaryKeys:[],confirmedKeys:[],noFutureKeys:[],manual:snapshot.obligations.map(r=>({...r,id:crypto.randomUUID(),amount:(r.amount/100).toFixed(2)})),page:0,filename:'',demo:false,dailyManual:true,loaded:true,saved:true};
  for(const id of ['from','from-display'])$(id).value=snapshot.from;$('to').value=snapshot.to;$('history-start').value=snapshot.from;$('history-end').value=addDays(snapshot.from,-1);
  for(const id of ['balance','daily','reserve','purchase'])$(id).value=(snapshot[id]/100).toFixed(2);
- $('review').hidden=true;$('forecast').hidden=false;$('reset').hidden=false;$('confirmed').checked=true;$('from-display').readOnly=false;
+ forecastReady=true;$('reset').hidden=false;$('confirmed').checked=true;$('from-display').readOnly=false;
  $('history-badge').textContent=draft?'Текущий расчёт':'Сохранённый расчёт';$('forecast-intro').textContent=draft?'Параметры восстановлены после входа. Можно изменить дату, суммы и покупку.':'Параметры восстановлены из аккаунта. Исходная выписка не сохранялась. Можно изменить дату, суммы и покупку.';
- $('step1').className='step';$('step2').className='step';$('step3').className='step active';renderManual();alertMessage('');calculate();$('forecast').scrollIntoView({behavior:'smooth'});
+ showToolsStage('#forecast');renderManual();alertMessage('');calculate();
 }
 $('from-display').addEventListener('change',()=>{if(state.saved){$('from').value=$('from-display').value;$('history-end').value=addDays($('from').value,-1);calculate();}});
 window.addEventListener('skebalance:profile',({detail:{previousUserId}})=>{
@@ -163,4 +256,4 @@ window.addEventListener('skebalance:profile',({detail:{previousUserId}})=>{
  $('from').value=today();
  $('to').value=addDays(today(),18);
 });
-initAccount({capture:captureCalculation,restore:restoreCalculation}).catch(()=>{ $('account-connection').textContent='Вход временно недоступен. Учебный пример доступен на главной.'; });
+initAccount({capture:captureCalculation,restore:restoreCalculation,showToolsStage}).catch(()=>{ $('account-connection').textContent='Вход временно недоступен. Учебный пример доступен на главной.'; });

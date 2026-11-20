@@ -143,12 +143,41 @@ export function recognizeSpending(operations,start,end){
  }
  return result;
 }
-export function detectRecurring(operations,confirmedKeys=[]){
- const groups=new Map();for(const t of operations){if(t.amount>=0||t.ignored)continue;const key=merchant(t),confirmed=confirmedKeys.includes(key),classification=classifyExpense(t);if(!key||/без описания/i.test(key)||(!confirmed&&(classification.reviewTransfer||['daily','occasional','transfer'].includes(t.spendingRole)||['Продукты','Кафе и рестораны','Транспорт','Одежда и аксессуары','Интернет-покупки','Покупки'].includes(classification.category))))continue;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(t);}
+const everydayCategories=['Продукты','Кафе и рестораны','Транспорт','Одежда и аксессуары','Интернет-покупки','Покупки'];
+export function detectRecurring(operations,confirmedKeys=[],diagnostics){
+ const groups=new Map();
+ for(const t of operations){
+  if(t.amount>=0||t.ignored)continue;
+  const key=merchant(t),classification=classifyExpense(t);
+  let reason;
+  if(!key||/без описания/i.test(key))reason='recipient';
+  else if(!confirmedKeys.includes(key)){
+   if(classification.reviewTransfer||t.spendingRole==='transfer')reason='transfer';
+   else if(['daily','occasional'].includes(t.spendingRole)||everydayCategories.includes(classification.category))reason='category';
+  }
+  if(reason){diagnostics?.set(t.id,{reason});continue;}
+  if(!groups.has(key))groups.set(key,[]);
+  groups.get(key).push(t);
+ }
  const result=[];
- for(const [key,items] of groups){const a=[...items].sort((x,y)=>x.date.localeCompare(y.date)),confirmed=confirmedKeys.includes(key);if(!confirmed&&a.length<3)continue;const gaps=a.slice(1).map((t,i)=>dayNumber(t.date)-dayNumber(a[i].date));if(!confirmed&&(!gaps.every(n=>(n>=25&&n<=35)||(n>=55&&n<=65))||gaps.filter(n=>n>40).length>1))continue;
- const amounts=a.map(t=>Math.abs(t.amount)),m=median(amounts);if(!confirmed&&Math.max(...amounts.map(n=>Math.abs(n-m)/m))>0.2)continue;
- result.push({id:'reg-'+result.length,key,label:a.at(-1).description,amount:Math.round(m),day:+a.at(-1).date.slice(8),lastDate:a.at(-1).date,operationIds:a.map(t=>t.id),count:a.length,confirmed,active:true});}
+ for(const [key,items] of groups){
+  const sorted=[...items].sort((a,b)=>a.date.localeCompare(b.date));
+  const confirmed=confirmedKeys.includes(key);
+  const gaps=sorted.slice(1).map((t,i)=>dayNumber(t.date)-dayNumber(sorted[i].date));
+  const amounts=sorted.map(t=>Math.abs(t.amount)),middle=median(amounts);
+  if(!confirmed){
+   let reason;
+   if(sorted.length<3)reason=key.startsWith('unknown:')?'recipient':'count';
+   else if(!gaps.every(n=>(n>=25&&n<=35)||(n>=55&&n<=65))||gaps.filter(n=>n>40).length>1)reason='interval';
+   else if(amounts.some(n=>Math.abs(n-middle)/middle>0.2))reason='amount';
+   if(reason){
+    if(diagnostics)for(const t of sorted)diagnostics.set(t.id,{reason,count:sorted.length,gaps});
+    continue;
+   }
+  }
+  const latest=sorted.at(-1);
+  result.push({id:'reg-'+result.length,key,label:latest.description,amount:Math.round(middle),day:+latest.date.slice(8),lastDate:latest.date,operationIds:sorted.map(t=>t.id),count:sorted.length,confirmed,active:true});
+ }
  return result;
 }
 export function occurrences(from,to,day){

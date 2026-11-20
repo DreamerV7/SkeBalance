@@ -49,7 +49,7 @@ export function readableError(error){
  if(/fetch|network|abort|timed out/i.test(message)||error?.name==='AbortError')return 'Не удалось связаться с сервером. Проверьте интернет и повторите.';
  return 'Действие не выполнено. Повторите позже. Данные в форме сохранены.';
 }
-export async function initAccount({capture,restore}){
+export async function initAccount({capture,restore,showToolsStage}){
  let client=null,user=null,mode='login',revision=0,runs=[],valid=false,ready=false;
  let loginOpen = false;
  const example = $('example');
@@ -80,6 +80,7 @@ export async function initAccount({capture,restore}){
   example.hidden = showProfile;
   profile.hidden = profile.inert = !showProfile;
   for (const view of profileViews) view.hidden = view !== activeView;
+  const toolsStage = activeView?.id === 'tools' ? showToolsStage(location.hash) : null;
   $('profile-back').hidden = !activeView || viewId === 'profile-sections';
   panel.hidden = !ready || !loginOpen || !wantsProfile || !!user;
   toggle.setAttribute('aria-controls', user ? 'profile' : 'account-panel');
@@ -93,7 +94,7 @@ export async function initAccount({capture,restore}){
   }
   if (!scroll) return;
   if (showProfile) {
-   const target = $(location.hash.slice(1));
+   const target = $(toolsStage || location.hash.slice(1));
    if (viewId === 'tools' && target !== activeView && !target.hidden) target.scrollIntoView({block: 'start', behavior: 'instant'});
    else window.scrollTo({top: 0, behavior: 'instant'});
    if (changedView) {

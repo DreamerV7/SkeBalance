@@ -415,3 +415,55 @@ input:focus-visible, select:focus-visible { box-shadow: 0 0 0 2px var(--pink); }
   .profile-card:hover, .profile-card:active { transform: none; }
   .profile-burn { display: none; }
 }
+
+#profile .review-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+#profile .review-card {
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--light);
+  min-width: 0;
+}
+.review-card > summary {
+  display: grid;
+  gap: 6px;
+  position: relative;
+  padding: 18px 48px 18px 20px;
+  border-radius: inherit;
+  list-style: none;
+  cursor: pointer;
+}
+.review-card > summary::-webkit-details-marker { display: none; }
+.review-card > summary::after {
+  content: "";
+  position: absolute;
+  top: 23px;
+  right: 23px;
+  width: 8px;
+  height: 8px;
+  border: solid var(--green);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.review-card[open] > summary::after { transform: rotate(225deg); }
+.review-card > summary:hover { background: color-mix(in srgb, var(--light), var(--ink) 8%); }
+.review-card-title { font-size: 14px; font-weight: 600; }
+.review-card-value {
+  color: var(--green);
+  font-size: clamp(1.3rem, 1rem + 1vw, 1.8rem);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.review-card-context { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.review-card-body { border-top: 1px solid var(--line); padding: 16px 20px 20px; }
+.review-card-body > :first-child { margin-top: 0; }
+.review-card .regular-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#profile .step[aria-disabled="true"] { cursor: default; }
+@media (max-width: 850px) {
+  #profile .review-grid { grid-template-columns: minmax(0, 1fr); }
+}
